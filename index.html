@@ -3,79 +3,58 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Seeing Signs — Retro Descent (v2)</title>
+<title>Seeing Signs — Retro Descent v3</title>
 <style>
   :root{
     --bg:#05070d;
-    --border1:#5de0ff;
-    --border2:#7a5dff;
+    --orange1:#ffb23c; /* border theme */
+    --orange2:#cc7a17;
     --ui:#98e7ff;
-    --accent:#ffb23c;
     --danger:#ff5d6c;
     --text:#eaf4ff;
   }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden;touch-action:none;
+    -webkit-user-select:none;user-select:none}
   canvas{display:block;width:100vw;height:100vh;background:radial-gradient(ellipse at 50% 35%, #0b1227 0%, #071024 60%, #05070d 100%);}
-  /* Top UI */
-  #topUI{position:fixed;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;z-index:4;pointer-events:none}
-  .bar{
-    width:min(58vw,520px);height:14px;border-radius:10px;padding:2px;background:rgba(255,255,255,.06);
-    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 4px 20px rgba(0,0,0,.5);
-  }
-  .bar>span{
-    display:block;height:100%;width:0%;border-radius:8px;
-    background:linear-gradient(90deg,#1bd0ff,#7bffcf);
-    box-shadow:0 0 16px rgba(60,220,255,.6);
-    transition:width .12s ease-out;
-  }
-  .pill{
-    min-width:72px;text-align:center;font-weight:800;font-size:12px;padding:6px 10px;border-radius:999px;
-    background:rgba(255,255,255,.08);box-shadow:0 0 0 1px rgba(255,255,255,.12) inset;
-  }
-  /* Boss UI */
-  #bossUI{position:fixed;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:10px;z-index:4;pointer-events:none}
-  .bossbar{width:min(64vw,640px);height:16px;border-radius:10px;padding:2px;background:rgba(255,255,255,.06);box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
-  .bossbar>span{display:block;height:100%;width:100%;border-radius:8px;background:linear-gradient(90deg,#ff5d6c,#ffb23c);box-shadow:0 0 16px rgba(255,120,120,.6)}
-  .bossname{font-weight:900;letter-spacing:.4px}
+  /* Top UI (outside border) */
+  #topUI{position:fixed;top:8px;left:50%;transform:translateX(-50%);
+    display:flex;gap:10px;align-items:center;z-index:4;pointer-events:none}
+  .bar{width:min(58vw,520px);height:14px;border-radius:10px;padding:2px;background:rgba(255,255,255,.06);
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 4px 20px rgba(0,0,0,.5);}
+  .bar>span{display:block;height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,#1bd0ff,#7bffcf);
+    box-shadow:0 0 16px rgba(60,220,255,.6);transition:width .12s ease-out;}
+  .pill{min-width:72px;text-align:center;font-weight:800;font-size:12px;padding:6px 10px;border-radius:999px;
+    background:rgba(255,255,255,.08);box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
   /* Overlays */
   .overlay{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(0,0,0,.75),rgba(0,0,0,.85));z-index:10}
   .card{width:min(860px,92vw);max-height:90vh;overflow:auto;background:#0a1120;border:1px solid #1f2a45;border-radius:16px;box-shadow:0 18px 70px rgba(0,0,0,.6);padding:18px 20px}
-  h1{margin:4px 0 8px;font-size:clamp(24px,3.4vw,36px);color:var(--accent)}
+  h1{margin:4px 0 8px;font-size:clamp(24px,3.4vw,36px);color:var(--orange1)}
   p{line-height:1.5}
   .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .btn{appearance:none;border:none;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#022337;box-shadow:0 6px 22px rgba(0,220,255,.3), inset 0 1px 0 rgba(255,255,255,.5)}
   .btn.alt{background:#1e2b4d;color:#d6e6ff;border:1px solid #2b3a63}
-  /* Pause */
-  #pauseBtn{position:fixed;top:8px;right:10px;z-index:6;background:#172445;color:#cfe5ff;border-radius:999px;padding:7px 12px;border:1px solid #2a3a63;cursor:pointer}
 </style>
 </head>
 <body>
   <canvas id="game" aria-label="Seeing Signs: Retro Descent"></canvas>
 
-  <!-- Time progress UI -->
+  <!-- Outside (always on top, outside the wall) -->
   <div id="topUI">
     <div class="bar"><span id="timeFill"></span></div>
     <div class="pill">Lv <span id="levelTxt">1</span></div>
   </div>
 
-  <!-- Boss UI -->
-  <div id="bossUI">
-    <div class="bossname" id="bossName">BOSS</div>
-    <div class="bossbar"><span id="bossHP"></span></div>
-  </div>
-
-  <button id="pauseBtn" title="Pause/Resume (P)">Pause</button>
-
   <!-- Start -->
   <div class="overlay" id="start">
     <div class="card">
       <h1>Seeing Signs — Retro Descent</h1>
-      <p>Place your sprite image as player.png next to this file and it will load automatically. You can still drag & drop a different image onto the game at any time.</p>
+      <p>Place your sprite image as <b>player.png</b> next to this file. The game loads it automatically.</p>
       <h3>Controls</h3>
       <ul>
-        <li>Move: WASD or Arrow keys</li>
-        <li>Mobile: drag anywhere — invisible joystick</li>
-        <li>Auto‑fire is always on</li>
+        <li>Move: WASD or Arrow keys (PC)</li>
+        <li>Mobile: touch anywhere. The invisible joystick is anchored to your ship — instant response.</li>
+        <li>Auto‑fire is always on.</li>
       </ul>
       <div class="row">
         <button class="btn" id="playBtn">Start</button>
@@ -98,43 +77,27 @@
 
 <script>
 (() => {
-  // Dynamic world: exactly matches the viewport (no gaps)
+  // Fixed mobile-like world (no gaps on any device)
+  const WORLD = { w: 360, h: 640 };
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-  let dpr = 1;
-  const WORLD = { w: 0, h: 0, topSafe: 60 };   // will be measured from UI
-  const FIELD = { x: 6, y: 66, w: 0, h: 0 };   // playfield inside border
 
-  function measureTopSafe() {
-    const topUI = isBossLevel(player.level) ? document.getElementById('bossUI')
-                                            : document.getElementById('topUI');
-    const rect = topUI.getBoundingClientRect();
-    WORLD.topSafe = Math.ceil(rect.height + 10);
-  }
-
+  let scale=1, padX=0, padY=0, dpr=1;
   function resize(){
-    dpr = Math.max(1, window.devicePixelRatio || 1);
+    dpr = Math.max(1, window.devicePixelRatio||1);
     const cw = window.innerWidth, ch = window.innerHeight;
-    canvas.width = Math.floor(cw * dpr);
-    canvas.height = Math.floor(ch * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0); // draw in CSS pixels
-    WORLD.w = cw; WORLD.h = ch;
-    measureTopSafe();
-    FIELD.x = 6;
-    FIELD.y = WORLD.topSafe + 6;
-    FIELD.w = WORLD.w - 12;
-    FIELD.h = WORLD.h - WORLD.topSafe - 12;
+    canvas.width = cw*dpr; canvas.height = ch*dpr;
+    scale = Math.min(canvas.width/WORLD.w, canvas.height/WORLD.h);
+    padX = (canvas.width/scale - WORLD.w)/2;
+    padY = (canvas.height/scale - WORLD.h)/2;
   }
   window.addEventListener('resize', resize);
+  resize();
 
-  // UI refs
+  // UI elements
   const timeFill = document.getElementById('timeFill');
   const levelTxt = document.getElementById('levelTxt');
   const topUI = document.getElementById('topUI');
-
-  const bossUI = document.getElementById('bossUI');
-  const bossHPFill = document.getElementById('bossHP');
-  const bossNameEl = document.getElementById('bossName');
 
   const start = document.getElementById('start');
   const playBtn = document.getElementById('playBtn');
@@ -145,53 +108,57 @@
   const restartBtn = document.getElementById('restartBtn');
   const toStartBtn = document.getElementById('toStartBtn');
 
-  const pauseBtn = document.getElementById('pauseBtn');
+  // Calculate top safe area (to keep border below the outside UI)
+  function topSafeWorldPx(){
+    const r = topUI.getBoundingClientRect();
+    return Math.ceil((r.height + 8) * (dpr/ (canvas.width / WORLD.w))); // convert approx to world units
+  }
 
-  // Player sprite: auto-load player.png
+  // Playfield inside rustic orange wall
+  const FIELD = { x: 10, y: 60, w: WORLD.w-20, h: WORLD.h-70 };
+  function layoutField(){
+    FIELD.y = Math.max(10, topSafeWorldPx()); // push below the top UI
+    FIELD.x = 10;
+    FIELD.w = WORLD.w - 20;
+    FIELD.h = WORLD.h - FIELD.y - 10;
+  }
+  layoutField();
+
+  // Player image auto-load
   let playerImg = null;
-  (function preloadPlayerPng(){
+  (function preloadPlayer(){
     const tryLoad = (src) => new Promise(res=>{
       const img = new Image();
       img.onload = () => res(img);
       img.onerror = () => res(null);
-      img.src = src + '?t=' + Date.now(); // bust cache during dev
+      img.src = src + '?t=' + Date.now();
     });
     (async () => {
       playerImg = await tryLoad('player.png') || await tryLoad('./assets/player.png');
     })();
   })();
-  // Drag & drop to replace
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => {
-    e.preventDefault();
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if(!file) return;
-    const img = new Image();
-    img.onload = () => { playerImg = img; };
-    img.src = URL.createObjectURL(file);
-  });
 
   // State
   let running=false, paused=false, lastTime=0;
   const keys = new Set();
-  const touch = { active:false, id:null, cx:0, cy:0, x:0, y:0 };
+  const stick = { active:false, x:0, y:0 }; // anchored on player
+
   const bullets=[], enemies=[], powerups=[], signs=[], effects=[], eBullets=[];
   let boss=null;
 
   const player = {
-    x: 0, y: 0, r: 16,
-    vx:0, vy:0, speed: 260, invuln:0, lives:3,
-    fireTimer:0, baseFireDelay:0.18,
+    x: WORLD.w/2, y: WORLD.h-100, r: 16,
+    vx:0, vy:0, speed: 280, invuln:0, lives:3,
+    fireTimer:0, baseFireDelay:0.16,
     spread:0, rapid:0, side:0, pierce:0, shield:0, magnet:0,
-    score:0, level:1
+    score:0, level:1, collected:0
   };
 
   const LEVEL_TIME = 30;
   let levelTime=0, demo=false;
 
-  // Input
+  // Input (PC)
   window.addEventListener('keydown', e=>{
-    if(e.code==='KeyP'){ togglePause(); return; }
     if(['ArrowLeft','KeyA'].includes(e.code)) keys.add('left');
     if(['ArrowRight','KeyD'].includes(e.code)) keys.add('right');
     if(['ArrowUp','KeyW'].includes(e.code)) keys.add('up');
@@ -204,49 +171,40 @@
     if(['ArrowDown','KeyS'].includes(e.code)) keys.delete('down');
   });
 
-  // Invisible joystick
+  // Invisible joystick: anchored at player center; direction is player->finger vector
   canvas.addEventListener('pointerdown', e=>{
-    if(touch.active) return;
-    touch.active=true; touch.id=e.pointerId;
-    const {x,y} = clientToWorld(e.clientX,e.clientY);
-    touch.cx=x; touch.cy=y; touch.x=x; touch.y=y;
-    e.preventDefault();
+    const p = clientToWorld(e.clientX,e.clientY);
+    stick.active = true;
+    stick.x = p.x; stick.y = p.y;
   });
   canvas.addEventListener('pointermove', e=>{
-    if(!touch.active || e.pointerId!==touch.id) return;
-    const {x,y} = clientToWorld(e.clientX,e.clientY);
-    touch.x=x; touch.y=y;
+    if(!stick.active) return;
+    const p = clientToWorld(e.clientX,e.clientY);
+    stick.x = p.x; stick.y = p.y;
   }, {passive:true});
-  const endTouch=()=>{ touch.active=false; touch.id=null; };
-  canvas.addEventListener('pointerup', endTouch);
-  canvas.addEventListener('pointercancel', endTouch);
-  canvas.addEventListener('lostpointercapture', endTouch);
+  const endStick=()=>{ stick.active=false; };
+  canvas.addEventListener('pointerup', endStick);
+  canvas.addEventListener('pointercancel', endStick);
+  canvas.addEventListener('lostpointercapture', endStick);
 
-  function togglePause(){
-    if(!running) return;
-    paused = !paused;
-    pauseBtn.textContent = paused ? 'Resume' : 'Pause';
-    if(!paused){ lastTime=performance.now(); requestAnimationFrame(frame); }
-  }
-  pauseBtn.addEventListener('click', togglePause);
-
+  // Start / restart
   playBtn.onclick = ()=>{ demo=false; startGame(); };
   demoBtn.onclick = ()=>{ demo=true; startGame(); };
   restartBtn.onclick = ()=>{ over.style.display='none'; demo=false; startGame(); };
   toStartBtn.onclick = ()=>{ over.style.display='none'; start.style.display='grid'; };
 
   function startGame(){
-    resize();
+    layoutField(); // ensure field respects top UI
     Object.assign(player, {
-      x: FIELD.x + FIELD.w/2, y: FIELD.y + FIELD.h - 90,
-      vx:0, vy:0, invuln:1.0, lives:3, fireTimer:0, score:0, level:1,
+      x: FIELD.x + FIELD.w/2, y: FIELD.y + FIELD.h - 90, vx:0, vy:0, invuln:1.0, lives:3,
+      fireTimer:0, score:0, collected:0, level:1,
       spread:0, rapid:0, side:0, pierce:0, shield:0, magnet:0
     });
     bullets.length=0; enemies.length=0; powerups.length=0; signs.length=0; effects.length=0; eBullets.length=0;
     boss = null;
-    levelTime=0; timeFill.style.width='0%';
+    levelTime=0; timeFill.style.width='0%'; levelTxt.textContent='1';
     start.style.display='none'; over.style.display='none';
-    running=true; paused=false; pauseBtn.textContent='Pause';
+    running=true; paused=false;
     if(demo){ player.rapid=20; player.spread=20; player.side=20; player.pierce=20; }
     enterLevel(1);
     lastTime=performance.now();
@@ -255,7 +213,7 @@
 
   function gameOver(){
     running=false;
-    summary.textContent = `Score: ${player.score} — Level reached: ${player.level}`;
+    summary.textContent = `Score: ${player.score} — Level reached: ${player.level} — Collected Sign: ${player.collected}`;
     over.style.display='grid';
   }
 
@@ -264,14 +222,8 @@
   function enterLevel(lv){
     player.level = lv;
     bullets.length=0; enemies.length=0; eBullets.length=0; powerups.length=0; signs.length=0;
-    levelTime=0;
-    levelTxt.textContent = lv;
-    updateTopBars();
-    if(isBossLevel(lv)){
-      boss = makeBoss(lv/5);
-    }else{
-      boss = null;
-    }
+    levelTime=0; timeFill.style.width='0%'; levelTxt.textContent = lv;
+    if(isBossLevel(lv)){ boss = makeBoss(lv/5); } else { boss=null; }
   }
 
   function nextLevel(){
@@ -280,43 +232,35 @@
     enterLevel(n);
   }
 
-  function updateTopBars(){
-    measureTopSafe();
-    FIELD.y = WORLD.topSafe + 6; FIELD.h = WORLD.h - WORLD.topSafe - 12;
-    if(isBossLevel(player.level)){ topUI.style.display='none'; bossUI.style.display='flex'; }
-    else { bossUI.style.display='none'; topUI.style.display='flex'; timeFill.style.width='0%'; }
-  }
-
-  // Spawning (straight downward only)
+  // Spawning (inside the wall, straight down only)
   let spawnTimer=0, signTimer=0, powerTimer=0;
-
   function spawnEnemy(){
     if(isBossLevel(player.level)) return;
     const L = player.level;
-    const speed = 170 + L*22; // fast
+    const speed = 180 + L*22;
     const hp = 1 + Math.floor((L-1)/3);
-    const type = ['grunt','squid','crab','wasp','beetle','tanker'][Math.floor(Math.random()*6)];
+    const type = ['redRocket','blueRocket','whiteOrange','domeUFO','ringSaucer','diamondShip'][Math.floor(Math.random()*6)];
     const x = FIELD.x + 18 + Math.random()*(FIELD.w-36);
-    const y = FIELD.y + 4; // inside border
+    const y = FIELD.y + 6;
     enemies.push({type,x,y,vy:speed,hp,r:14,t:0});
   }
   function spawnSign(){
     const x = FIELD.x + 18 + Math.random()*(FIELD.w-36);
-    signs.push({x, y:FIELD.y+6, vy: 150 + Math.random()*30, t:0});
+    signs.push({x, y:FIELD.y+8, vy: 160 + Math.random()*30, t:0});
   }
   function spawnPower(){
     const list=['spread','rapid','side','pierce','shield','magnet'];
     const type = list[Math.floor(Math.random()*list.length)];
     const x = FIELD.x + 18 + Math.random()*(FIELD.w-36);
-    powerups.push({type, x, y:FIELD.y+6, vy: 150, t:0});
+    powerups.push({type, x, y:FIELD.y+8, vy: 160, t:0});
   }
 
-  // Bosses (unchanged logic; positioned below UI)
+  // Bosses (stay near the top)
   function makeBoss(index){
     const L = player.level;
-    const baseHP = [1600, 2200, 3000, 3900][index-1] + (L-5*index)*260;
-    const hp = Math.max(baseHP, 1200);
-    const bx = FIELD.x + FIELD.w/2, by = FIELD.y + 70;
+    const baseHP = [1700, 2400, 3200, 4200][index-1] + (L-5*index)*260;
+    const hp = Math.max(baseHP, 1300);
+    const bx = FIELD.x + FIELD.w/2, by = FIELD.y + 74;
     const name = ['Overlord Saucer','Mecha-Crab','Tri-Dreadnought','Star Eye Citadel'][index-1];
     return { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0 };
   }
@@ -328,14 +272,15 @@
     if(type==='side')  player.side  = Math.max(player.side,  DUR);
     if(type==='pierce')player.pierce= Math.max(player.pierce,DUR);
     if(type==='shield')player.shield= Math.max(player.shield,DUR);
-    if(type==='magnet')player.magnet= Math.max(player.magnet,DUR); // magnet now increases pickup radius only
+    if(type==='magnet')player.magnet= Math.max(player.magnet,DUR); // magnet expands pickup radius only
   }
 
+  // Loop
   function frame(ts){
-    if(!running || paused) return;
+    if(!running) return;
     const dt = Math.min(0.033, (ts-lastTime)/1000); lastTime=ts;
 
-    // Time bar
+    // Level timer/progression
     if(!isBossLevel(player.level)){
       levelTime += dt;
       const pct = Math.min(1, levelTime/LEVEL_TIME);
@@ -348,13 +293,16 @@
       if(player[k]>0) player[k]-=dt;
     });
 
-    // Input
+    // Movement
     let ax=0, ay=0;
     if(keys.has('left')) ax-=1; if(keys.has('right')) ax+=1;
     if(keys.has('up')) ay-=1; if(keys.has('down')) ay+=1;
-    if(touch.active){
-      const dx = touch.x - touch.cx, dy = touch.y - touch.cy, mag = Math.hypot(dx,dy);
-      if(mag>6){ ax += dx/mag; ay += dy/mag; }
+
+    if(stick.active){
+      // direction from player to finger (anchored joystick)
+      const dx = stick.x - player.x, dy = stick.y - player.y;
+      const m = Math.hypot(dx,dy);
+      if(m>2){ ax = dx/m; ay = dy/m; }
     }
     const spd = player.speed;
     player.vx = ax*spd; player.vy = ay*spd;
@@ -362,20 +310,20 @@
     player.y = clamp(player.y + player.vy*dt, FIELD.y+12, FIELD.y+FIELD.h-12);
 
     // Auto-fire
-    const delay = player.baseFireDelay * (player.rapid>0?0.5:1);
+    const delay = player.baseFireDelay * (player.rapid>0?0.55:1);
     player.fireTimer -= dt;
     if(player.fireTimer<=0){ player.fireTimer += delay; firePlayer(); }
 
-    // Spawn rates
+    // Spawns
     spawnTimer -= dt; signTimer -= dt; powerTimer -= dt;
     if(!isBossLevel(player.level)){
-      const rate = Math.max(0.18, 1.0 - player.level*0.06);
+      const rate = Math.max(0.16, 0.95 - player.level*0.05);
       if(spawnTimer<=0){ spawnEnemy(); spawnTimer = rate; }
     }
-    if(signTimer<=0){ spawnSign(); signTimer = 1.0 + Math.random()*1.2; }
-    if(powerTimer<=0){ if(Math.random()<0.65) spawnPower(); powerTimer = 4.0 + Math.random()*2.0; }
+    if(signTimer<=0){ spawnSign(); signTimer = 1.0 + Math.random()*1.0; }
+    if(powerTimer<=0){ if(Math.random()<0.6) spawnPower(); powerTimer = 4 + Math.random()*2; }
 
-    // Descenders (perfectly straight down)
+    // Descenders – perfectly straight down
     for(let i=enemies.length-1;i>=0;i--){
       const e=enemies[i]; e.t+=dt; e.y += e.vy*dt;
       if(e.y > FIELD.y + FIELD.h + 20){ enemies.splice(i,1); loseLife(); continue; }
@@ -387,14 +335,11 @@
       boss.t += dt; boss.patternAngle += dt;
       const hpPct = boss.hp/boss.hpMax;
       boss.phase = hpPct<=0.33?3:(hpPct<=0.66?2:1);
-      boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*0.6)*Math.min(130, FIELD.w*0.34);
+      boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*0.6)*Math.min(120, FIELD.w*0.33);
       boss.fireCd -= dt;
       const fireRate = boss.phase===1?0.5:(boss.phase===2?0.34:0.22);
       if(boss.fireCd<=0){ boss.fireCd=fireRate; bossShoot(boss); }
-      // UI
-      bossUI.style.display='flex'; topUI.style.display='none';
-      bossNameEl.textContent=boss.name; bossHPFill.style.width = Math.max(0,(boss.hp/boss.hpMax)*100)+'%';
-    }else{ bossUI.style.display='none'; topUI.style.display='flex'; }
+    }
 
     // Bullets
     for(let i=bullets.length-1;i>=0;i--){
@@ -404,7 +349,11 @@
           const e=enemies[j];
           if(circleHit(b,e, e.r+2)){
             e.hp -= b.dmg;
-            if(e.hp<=0){ spawnPop(e.x,e.y); enemies.splice(j,1); if(Math.random()<0.45) signs.push({x:e.x,y:e.y,vy:160,t:0}); }
+            if(e.hp<=0){
+              spawnPop(e.x,e.y);
+              enemies.splice(j,1);
+              if(Math.random()<0.5) signs.push({x:e.x,y:e.y,vy:170,t:0});
+            }
             if(b.pierce>0){ b.pierce--; } else { bullets.splice(i,1); }
             break;
           }
@@ -426,11 +375,11 @@
       if(b.y>FIELD.y+FIELD.h+40 || b.x<FIELD.x-50 || b.x>FIELD.x+FIELD.w+50) eBullets.splice(i,1);
     }
 
-    // Signs and powerups (straight)
+    // Signs / Powerups (straight)
     for(let i=signs.length-1;i>=0;i--){
       const s=signs[i]; s.t+=dt; s.y += s.vy*dt;
       const pickR = player.magnet>0 ? 26 : 18;
-      if(circleHit(player,s, pickR)){ player.score += 10; signs.splice(i,1); continue; }
+      if(circleHit(player,s, pickR)){ player.score += 10; player.collected += 1; signs.splice(i,1); continue; }
       if(s.y>FIELD.y+FIELD.h+16) signs.splice(i,1);
     }
     for(let i=powerups.length-1;i>=0;i--){
@@ -447,10 +396,16 @@
     }
 
     // Render ----------------------------------------------------
-    ctx.clearRect(0,0, WORLD.w, WORLD.h);
-    drawStarfield();
+    ctx.setTransform(scale,0,0,scale,0,0);
+    ctx.clearRect(0,0, canvas.width/scale, canvas.height/scale);
+    ctx.save();
+    ctx.translate(padX, padY);
 
-    drawBorder();
+    drawStarfield();
+    drawRustWall();
+
+    // HUD inside wall (health + tiny collected)
+    drawHUDInside();
 
     // Signs
     for(const s of signs) drawSign(s);
@@ -480,13 +435,14 @@
       ctx.globalAlpha = 1;
     }
 
+    ctx.restore();
     requestAnimationFrame(frame);
   }
 
   // Drawing -----------------------------------------------------
   function drawStarfield(){
     const t = performance.now()*0.001;
-    for(let i=0;i<100;i++){
+    for(let i=0;i<90;i++){
       const x = (i*37.2 + (t*12*(i%3+1)))%WORLD.w;
       const y = (i*59.7 + (t*22*(i%4+1)))%WORLD.h;
       const z = (i%3+1)*0.6;
@@ -497,28 +453,52 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawBorder(){
-    // Outer glow
-    ctx.strokeStyle = 'rgba(120,220,255,.25)'; ctx.lineWidth = 8; ctx.strokeRect(FIELD.x-2, FIELD.y-2, FIELD.w+4, FIELD.h+4);
-    // Main border
+  function drawRustWall(){
+    // Outer glow rim
+    ctx.strokeStyle = 'rgba(255,180,80,.25)'; ctx.lineWidth = 10;
+    ctx.strokeRect(FIELD.x-3, FIELD.y-3, FIELD.w+6, FIELD.h+6);
+    // Main rustic border (thicker, metallic orange)
     const g = ctx.createLinearGradient(0,FIELD.y,0,FIELD.y+FIELD.h);
-    g.addColorStop(0,'#5de0ff'); g.addColorStop(1,'#7a5dff');
-    ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.strokeRect(FIELD.x, FIELD.y, FIELD.w, FIELD.h);
+    g.addColorStop(0,'#ffb23c'); g.addColorStop(1,'#cc7a17');
+    ctx.strokeStyle = g; ctx.lineWidth = 6.5; ctx.strokeRect(FIELD.x, FIELD.y, FIELD.w, FIELD.h);
+    // Rivet dots
+    ctx.fillStyle='rgba(255,255,255,.2)';
+    for(let x=FIELD.x+10; x<FIELD.x+FIELD.w-10; x+=26){ ctx.fillRect(x, FIELD.y-2, 2,2); ctx.fillRect(x, FIELD.y+FIELD.h, 2,2); }
+    for(let y=FIELD.y+10; y<FIELD.y+FIELD.h-10; y+=26){ ctx.fillRect(FIELD.x-2,y,2,2); ctx.fillRect(FIELD.x+FIELD.w,y,2,2); }
+  }
+
+  function drawHUDInside(){
+    const pad = 8;
+    // Health (hearts) at top-right inside wall
+    let hx = FIELD.x + FIELD.w - pad, hy = FIELD.y + pad + 2;
+    for(let i=0;i<player.lives;i++){
+      drawHeart(hx - i*14, hy, 6);
+    }
+    // Tiny "Collected Sign"
+    ctx.fillStyle='#cfe5ff'; ctx.font='10px system-ui'; ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText(`Collected Sign: ${player.collected}`, FIELD.x+FIELD.w-pad, hy+14);
+  }
+  function drawHeart(x,y,r){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.fillStyle='#ff6b81';
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.bezierCurveTo(r, r-6, r, -r/2, 0, -r/3);
+    ctx.bezierCurveTo(-r, -r/2, -r, r-6, 0, r);
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawPlayer(){
     const px = player.x, py = player.y;
     if(playerImg){
       const iw = playerImg.width, ih = playerImg.height;
-      const target = 34; // visual size
-      const s = target / Math.max(iw, ih);
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.scale(s, s);
-      ctx.drawImage(playerImg, -iw/2, -ih/2, iw, ih);
-      ctx.restore();
+      const target = 34; const s = target / Math.max(iw, ih);
+      ctx.save(); ctx.translate(px, py); ctx.scale(s, s);
+      ctx.drawImage(playerImg, -iw/2, -ih/2, iw, ih); ctx.restore();
     }else{
-      // minimal fallback
+      // fallback arrow
       ctx.save(); ctx.translate(px,py);
       ctx.fillStyle='#f5d14a'; ctx.strokeStyle='#6a4b00'; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(-16,-10); ctx.lineTo(-8,0); ctx.lineTo(-16,10); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -533,114 +513,124 @@
   function drawBullets(arr, friendly){
     if(friendly){
       ctx.strokeStyle = '#fffbd1'; ctx.lineWidth=2;
-      for(const b of arr){ ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x, b.y+4); ctx.stroke(); }
+      for(const b of arr){ ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x, b.y+5); ctx.stroke(); }
     }else{
       ctx.fillStyle = '#ff6a6a';
       for(const b of arr){ ctx.beginPath(); ctx.arc(b.x,b.y,2.4,0,Math.PI*2); ctx.fill(); }
     }
   }
 
-  // Detailed retro enemies (metal look)
-  function metalGradient(x0,y0,x1,y1,c1,c2){ const g=ctx.createLinearGradient(x0,y0,x1,y1); g.addColorStop(0,c1); g.addColorStop(1,c2); return g; }
-  function eyes(){
-    ctx.fillStyle='#c7e6ff';
-    ctx.beginPath(); ctx.arc(-6,2,2,0,Math.PI*2); ctx.arc(6,2,2,0,Math.PI*2); ctx.fill();
-  }
-  function rivets(w,h,step){
-    ctx.fillStyle='rgba(255,255,255,.25)';
-    for(let x=-w;x<=w;x+=step){ ctx.fillRect(x-0.5,-h-0.5,1,1); ctx.fillRect(x-0.5,h-0.5,1,1); }
+  // Enemies — detailed retro ships with engine flames
+  function drawEngineFlame(x,y,wide=6,long=10){
+    const t = performance.now()*0.003;
+    const len = long + Math.sin(t*9+y)*2;
+    const g = ctx.createRadialGradient(x,y+2,1, x,y+len, len);
+    g.addColorStop(0,'rgba(255,240,180,.95)');
+    g.addColorStop(0.5,'rgba(255,160,40,.8)');
+    g.addColorStop(1,'rgba(255,90,10,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(x, y+len*0.6, wide*0.55, len, 0, 0, Math.PI*2); ctx.fill();
   }
 
   function drawEnemy(e){
     ctx.save(); ctx.translate(e.x,e.y);
     switch(e.type){
-      case 'grunt':{ // invader-like head with legs
-        ctx.fillStyle = metalGradient(0,-12,0,12,'#9fb3c8','#3b4c61');
-        ctx.strokeStyle='#192431'; ctx.lineWidth=1.2;
-        ctx.beginPath(); ctx.roundRect(-14,-10,28,20,4); ctx.fill(); ctx.stroke();
-        // panels
-        ctx.strokeStyle='rgba(255,255,255,.15)';
-        ctx.beginPath(); ctx.moveTo(-14,0); ctx.lineTo(14,0); ctx.moveTo(0,-10); ctx.lineTo(0,10); ctx.stroke();
-        // legs
-        ctx.fillStyle='#425b76'; ctx.fillRect(-16,10,8,4); ctx.fillRect(8,10,8,4);
-        eyes();
+      // 1) Red rocket with side fins
+      case 'redRocket': {
+        ctx.fillStyle='#ef4545'; ctx.strokeStyle='#6b1a1a'; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.roundRect(-9,-16,18,28,6); ctx.fill(); ctx.stroke();
+        // canopy
+        ctx.fillStyle='#234463'; ctx.beginPath(); ctx.ellipse(0,-6,6,5,0,0,Math.PI*2); ctx.fill();
+        // stripe
+        ctx.fillStyle='#ffd9a4'; ctx.fillRect(-9,0,18,2);
+        // fins
+        ctx.fillStyle='#a21f1f'; ctx.fillRect(-14,2,8,6); ctx.fillRect(6,2,8,6);
+        // flame
+        drawEngineFlame(0,12,6,14);
         break;
       }
-      case 'squid':{
-        ctx.fillStyle = metalGradient(-12,0,12,0,'#bcd3e9','#536a82');
-        ctx.beginPath(); ctx.ellipse(0,-2,14,10,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#485e77'; for(let i=-2;i<=2;i++){ ctx.fillRect(i*5-2,8,4,6); }
-        eyes();
+      // 2) Blue tall rocket
+      case 'blueRocket': {
+        ctx.fillStyle='#5aa5ff'; ctx.strokeStyle='#1c3a6b'; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.roundRect(-8,-18,16,30,8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='#183154'; ctx.beginPath(); ctx.ellipse(0,-8,5,4,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#8fc2ff'; ctx.fillRect(-8,-2,16,2);
+        ctx.fillStyle='#3766a8'; ctx.fillRect(-12,4,8,5); ctx.fillRect(4,4,8,5);
+        drawEngineFlame(0,12,5,13);
         break;
       }
-      case 'crab':{
-        ctx.fillStyle = metalGradient(0,-12,0,12,'#ffc2a0','#7a3b2b');
-        ctx.beginPath(); ctx.roundRect(-16,-8,32,16,6); ctx.fill();
-        ctx.fillStyle='#6b3b2a'; ctx.fillRect(-22,2,10,4); ctx.fillRect(12,2,10,4); // claws
-        eyes();
-        rivets(12,8,6);
+      // 3) White/orange vertical rocket
+      case 'whiteOrange': {
+        ctx.fillStyle='#eaecef'; ctx.strokeStyle='#61646b'; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.roundRect(-8,-18,16,30,6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='#ffb23c'; ctx.fillRect(-8,2,16,3);
+        ctx.fillStyle='#2d3f5c'; ctx.beginPath(); ctx.ellipse(0,-6,4.5,4,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff9a2a'; ctx.fillRect(-12,6,8,5); ctx.fillRect(4,6,8,5);
+        drawEngineFlame(0,12,5.5,14);
         break;
       }
-      case 'wasp':{
-        ctx.fillStyle = metalGradient(-14,0,14,0,'#ffe58a','#7a650e');
-        ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(14,0); ctx.lineTo(0,12); ctx.lineTo(-14,0); ctx.closePath(); ctx.fill();
-        ctx.fillStyle='#4a3a06'; ctx.fillRect(-12,-1,24,2); // stripe
-        eyes();
+      // 4) Classic blue-dome UFO
+      case 'domeUFO': {
+        ctx.fillStyle='#ffcf6a'; ctx.strokeStyle='#6a4b00'; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.ellipse(0,6,16,6,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='#98d7ff'; ctx.beginPath(); ctx.ellipse(0,-2,10,7,0,0,Math.PI*2); ctx.fill();
+        drawEngineFlame(-8,10,3.5,9); drawEngineFlame(8,10,3.5,9);
         break;
       }
-      case 'beetle':{
-        ctx.fillStyle = metalGradient(0,-14,0,14,'#caaeff','#3b2b71');
-        ctx.beginPath(); ctx.ellipse(0,0,12,14,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#2c2156'; ctx.fillRect(-13,0,26,2);
-        ctx.fillStyle='#2c2156'; ctx.fillRect(-16,8,8,3); ctx.fillRect(8,8,8,3);
-        eyes();
+      // 5) Ring saucer (Saturn-like)
+      case 'ringSaucer': {
+        ctx.fillStyle='#f2b36c'; ctx.strokeStyle='#6b3a0f'; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,Math.PI*2); ctx.stroke();
+        drawEngineFlame(-6,8,3,9); drawEngineFlame(6,8,3,9);
         break;
       }
-      case 'tanker':{
-        ctx.fillStyle = metalGradient(0,-12,0,12,'#b6d1ff','#2e4669');
-        ctx.beginPath(); ctx.roundRect(-18,-8,36,16,4); ctx.fill();
-        ctx.fillStyle='#21344d'; ctx.fillRect(-20,4,12,4); ctx.fillRect(8,4,12,4); // side pods
-        ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.beginPath(); ctx.moveTo(-18,0); ctx.lineTo(18,0); ctx.stroke();
-        eyes();
+      // 6) Diamond ship
+      case 'diamondShip': {
+        ctx.fillStyle='#cde1ff'; ctx.strokeStyle='#224565'; ctx.lineWidth=1.2;
+        ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(10,0); ctx.lineTo(0,12); ctx.lineTo(-10,0); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='#89b7ff'; ctx.fillRect(-8,-1,16,2);
+        drawEngineFlame(0,10,4.5,11);
         break;
       }
     }
     ctx.restore();
   }
 
-  // Unique power-ups
+  // Unique tech-y power-ups
   function drawPowerup(p){
     ctx.save(); ctx.translate(p.x,p.y);
     switch(p.type){
-      case 'shield':{ // ring emitter
-        const g = ctx.createRadialGradient(0,0,2,0,0,10); g.addColorStop(0,'#bfe6ff'); g.addColorStop(1,'#3b78c4');
-        ctx.strokeStyle='#4cb6ff'; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); ctx.lineWidth=2; ctx.stroke();
+      case 'shield':{ // Aegis emitter ring + core
+        const g = ctx.createRadialGradient(0,0,2,0,0,10); g.addColorStop(0,'#cfe9ff'); g.addColorStop(1,'#3a79c6');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#6bd1ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.stroke();
         break;
       }
-      case 'rapid':{ // turbine
+      case 'rapid':{ // Overclock turbine module
         ctx.fillStyle='#d0f4ff'; ctx.strokeStyle='#2a4c68'; ctx.lineWidth=1.5;
         ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); ctx.stroke();
         ctx.strokeStyle='#3a5e7c'; for(let i=0;i<6;i++){ const a=i*(Math.PI/3); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*8, Math.sin(a)*8); ctx.stroke(); }
         break;
       }
-      case 'spread':{ // tri-core
-        ctx.fillStyle='#8fffd6'; ctx.beginPath(); for(let i=0;i<3;i++){ const a=i*(2*Math.PI/3); ctx.moveTo(0,0); ctx.arc(Math.cos(a)*6, Math.sin(a)*6, 4, 0, Math.PI*2); } ctx.fill();
+      case 'spread':{ // Tri-core emitter
+        ctx.fillStyle='#8fffd6'; for(let i=0;i<3;i++){ const a=i*(2*Math.PI/3); ctx.beginPath(); ctx.arc(Math.cos(a)*6, Math.sin(a)*6, 4, 0, Math.PI*2); ctx.fill(); }
         ctx.fillStyle='#1c3a32'; ctx.beginPath(); ctx.arc(0,0,2,0,Math.PI*2); ctx.fill();
         break;
       }
-      case 'side':{ // side gun pods
+      case 'side':{ // Twin gun pods
         ctx.fillStyle='#ffd96a'; ctx.strokeStyle='#6a540e'; ctx.lineWidth=1.2;
         ctx.beginPath(); ctx.roundRect(-14,-6,8,12,3); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.roundRect(6,-6,8,12,3); ctx.fill(); ctx.stroke();
         break;
       }
-      case 'pierce':{ // drill cone
+      case 'pierce':{ // Phase drill
         ctx.fillStyle='#ff8181'; ctx.strokeStyle='#6b1a1a';
         ctx.beginPath(); ctx.moveTo(0,-10); ctx.lineTo(7,10); ctx.lineTo(-7,10); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(-5,5); ctx.lineTo(5,5); ctx.moveTo(-3,0); ctx.lineTo(3,0); ctx.moveTo(-1,-5); ctx.lineTo(1,-5); ctx.stroke();
         break;
       }
-      case 'magnet':{ // horseshoe magnet
+      case 'magnet':{ // Horseshoe magnet
         ctx.fillStyle='#ffa54a'; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI,true); ctx.lineTo(6,6); ctx.arc(6,6,2,Math.PI,0); ctx.lineTo(-6,8); ctx.arc(-6,6,2,0,Math.PI); ctx.closePath(); ctx.fill();
         ctx.fillStyle='#fff'; ctx.fillRect(-8,6,3,3); ctx.fillRect(5,6,3,3);
         break;
@@ -649,30 +639,27 @@
     ctx.restore();
   }
 
-  // Boss visuals
+  // Boss drawing (kept from previous)
   function drawBoss(b){
     ctx.save(); ctx.translate(b.x,b.y);
+    const metal = (x0,y0,x1,y1,c1,c2)=>{const g=ctx.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,c1);g.addColorStop(1,c2);return g;};
     switch(b.index){
-      case 1: { // Overlord Saucer (panelled)
-        ctx.fillStyle=metalGradient(0,-24,0,24,'#f3d67a','#7f5a0a');
-        ctx.beginPath(); ctx.ellipse(0,10,80,24,0,0,Math.PI*2); ctx.fill();
+      case 1:{
+        ctx.fillStyle=metal(0,-24,0,24,'#f3d67a','#7f5a0a'); ctx.beginPath(); ctx.ellipse(0,10,80,24,0,0,Math.PI*2); ctx.fill();
         ctx.fillStyle='#1c2e49'; ctx.beginPath(); ctx.ellipse(0,-8,40,18,0,0,Math.PI*2); ctx.fill();
         break;
       }
-      case 2: { // Mecha-Crab
-        ctx.fillStyle=metalGradient(0,-28,0,28,'#ff89a3','#6b1a2e');
-        ctx.beginPath(); ctx.ellipse(0,0,70,28,0,0,Math.PI*2); ctx.fill();
+      case 2:{
+        ctx.fillStyle=metal(0,-28,0,28,'#ff89a3','#6b1a2e'); ctx.beginPath(); ctx.ellipse(0,0,70,28,0,0,Math.PI*2); ctx.fill();
         ctx.fillStyle='#6b1a2e'; ctx.fillRect(-90,10,30,8); ctx.fillRect(60,10,30,8);
         break;
       }
-      case 3: { // Tri-Dreadnought
-        ctx.fillStyle=metalGradient(-80,0,80,0,'#c9bbff','#3c2f79');
-        ctx.beginPath(); ctx.moveTo(0,-30); ctx.lineTo(80,30); ctx.lineTo(-80,30); ctx.closePath(); ctx.fill();
+      case 3:{
+        ctx.fillStyle=metal(-80,0,80,0,'#c9bbff','#3c2f79'); ctx.beginPath(); ctx.moveTo(0,-30); ctx.lineTo(80,30); ctx.lineTo(-80,30); ctx.closePath(); ctx.fill();
         break;
       }
-      case 4: { // Star Eye Citadel
-        ctx.fillStyle=metalGradient(0,-60,0,60,'#a6ffff','#236c6c');
-        ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill();
+      case 4:{
+        ctx.fillStyle=metal(0,-60,0,60,'#a6ffff','#236c6c'); ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill();
         ctx.fillStyle='#112338'; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.fill();
         break;
       }
@@ -689,7 +676,7 @@
       else { const a=b.patternAngle*3; add(b.x+Math.cos(a)*30,b.y+25, Math.cos(a)*120, 200); add(b.x+Math.cos(a+Math.PI)*30,b.y+25, Math.cos(a+Math.PI)*120, 200); }
     } else if(b.index===2){
       if(b.phase===1){ for(let i=0;i<4;i++){ const a=(-0.35+i*0.23)+Math.sin(b.t*0.8)*0.2; add(b.x,b.y+20, Math.sin(a)*140,180);} }
-      else if(b.phase===2){ for(let i=-1;i<=1;i++){ add(b.x+i*20,b.y+18,i*40,210);} }
+      else if(b.phase===2){ for(let i=-1;i<=1;i++){ add(b.x+i*20,b.y+18, i*40,210);} }
       else { const a=b.patternAngle*4; for(let k=0;k<2;k++){ const ang=a+(k*Math.PI); add(b.x+Math.cos(ang)*40,b.y+20, Math.cos(ang)*140,220);} }
     } else if(b.index===3){
       if(b.phase===1){ for(let i=0;i<3;i++){ const a=(-0.25+i*0.25); add(b.x,b.y+28, Math.sin(a)*130, 200);} }
@@ -702,7 +689,7 @@
     }
   }
 
-  // Signs (stylish orange, glow, straight fall)
+  // Signs — small, stylish, orange, glow
   function drawSign(s){
     ctx.save(); ctx.translate(s.x,s.y);
     ctx.font='italic 12px "Trebuchet MS", Arial, sans-serif';
@@ -715,11 +702,11 @@
 
   // Player fire
   function firePlayer(){
-    const speed = -420;
+    const speed = -430;
     const pierce = player.pierce>0 ? 2 : 0;
     const add = (x,y,vx,vy)=> bullets.push({x,y,vx,vy,dmg:1,pierce});
     add(player.x, player.y-18, 0, speed);
-    if(player.spread>0){ add(player.x,player.y-18,-80,speed); add(player.x,player.y-18,80,speed); }
+    if(player.spread>0){ add(player.x,player.y-18,-90,speed); add(player.x,player.y-18,90,speed); }
     if(player.side>0){ add(player.x-14,player.y-10,0,speed*0.96); add(player.x+14,player.y-10,0,speed*0.96); }
   }
 
@@ -727,7 +714,15 @@
   function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
   function circleHit(a,b, r){ const dx=(a.x-b.x), dy=(a.y-b.y); return dx*dx+dy*dy <= r*r; }
   function pointInRect(x,y, rx,ry,rw,rh){ return x>=rx && x<=rx+rw && y>=ry && y<=ry+rh; }
-  function clientToWorld(cx,cy){ const r=canvas.getBoundingClientRect(); return { x: cx-r.left, y: cy-r.top }; }
+  function clientToWorld(cx,cy){
+    const rect = canvas.getBoundingClientRect();
+    // account for world transform
+    const px = (cx-rect.left) * (canvas.width/rect.width);
+    const py = (cy-rect.top) * (canvas.height/rect.height);
+    const x = px/scale - padX;
+    const y = py/scale - padY;
+    return { x, y };
+  }
 
   function loseLife(){ if(player.invuln>0) return; player.lives--; player.invuln=1; if(player.lives<=0) gameOver(); }
   function hitPlayer(){
@@ -740,7 +735,7 @@
   function spawnBigExplosion(x,y){ for(let i=0;i<80;i++){ effects.push({x,y,vx:(Math.random()-0.5)*240,vy:(Math.random()-0.5)*240,life:0.9,t:0,color: i%2? '#ff9a3c':'#ffd37a'}); } }
 
   // Init
-  resize(); // initial fit
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
