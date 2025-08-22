@@ -26,11 +26,22 @@
     box-shadow:0 0 12px rgba(60,220,255,.5);transition:width .1s ease-out;}
   .pill{min-width:58px;text-align:center;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px;
     background:rgba(255,255,255,.08);box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
-
-  /* Game Over (simple) */
-  #gameOver{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.8);z-index:10;color:#eaf4ff}
-  .overCard{background:#0a1120;border:1px solid #1f2a45;border-radius:14px;box-shadow:0 18px 70px rgba(0,0,0,.6);padding:16px 18px;text-align:center}
-  .btn{appearance:none;border:none;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#022337;margin:8px}
+  /* Game Over overlay (bigger for touch) */
+  #gameOver{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.75);z-index:10;color:#eaf4ff}
+  .overCard{
+    width:min(560px,92vw);
+    background:#0a1120;border:1px solid #1f2a45;border-radius:18px;
+    box-shadow:0 22px 90px rgba(0,0,0,.7);
+    padding:20px 22px;text-align:center
+  }
+  .overTitle{font:900 22px/1.2 system-ui;margin:0 0 8px}
+  .overStats{font:600 14px/1.3 system-ui;color:#cfe5ff;margin-bottom:12px}
+  .btnRow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .btn{
+    appearance:none;border:none;border-radius:14px;padding:14px 20px;font:800 16px/1 system-ui;cursor:pointer;
+    background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#022337;min-width:140px
+  }
+  .btn--menu{background:linear-gradient(180deg,#ffd08a,#ffb23c);color:#5c2b00}
 </style>
 </head>
 <body>
@@ -45,8 +56,12 @@
   <!-- GAME OVER -->
   <div id="gameOver">
     <div class="overCard">
-      <div id="summary" style="margin-bottom:10px;font-weight:700">Score: 0 — Level 1</div>
-      <button class="btn" id="restartBtn">Restart</button>
+      <div class="overTitle">Game Over</div>
+      <div id="summary" class="overStats">Score: 0 — Level 1</div>
+      <div class="btnRow">
+        <button class="btn" id="restartBtn">Restart</button>
+        <button class="btn btn--menu" id="menuBtn">Back to Menu</button>
+      </div>
     </div>
   </div>
 
@@ -76,6 +91,7 @@
   const over = document.getElementById('gameOver');
   const summary = document.getElementById('summary');
   const restartBtn = document.getElementById('restartBtn');
+  const menuBtn = document.getElementById('menuBtn');
 
   // Playfield inside wall, tiny gap under top UI
   const FIELD = { x: 10, y: 40, w: WORLD.w-20, h: WORLD.h-50 };
@@ -165,7 +181,8 @@
   }, {passive:true});
   ['pointerup','pointercancel','lostpointercapture'].forEach(ev => canvas.addEventListener(ev, ()=>{ if(gameState==='playing') stick.active=false; }));
 
-  document.getElementById('restartBtn').onclick = ()=>{ over.style.display='none'; startGame(); };
+  restartBtn.onclick = ()=>{ over.style.display='none'; startGame(); };
+  menuBtn.onclick = ()=>{ over.style.display='none'; gameState='menu'; running=true; };
 
   // Start/levels --------------------------------------------------
   function startGame(){
@@ -223,7 +240,10 @@
     const L = player.level;
     const speed = 240 + L*36 + Math.random()*30; // faster descent
     const hp = 1 + Math.floor((L-1)/3);
-    const typePool = ['gunship','interceptor','bomber','scout','trident','mantis','bulwark','striker'];
+    const typePool = [
+      'crimson1','crimson2','crimson3', // detailed red ships
+      'gunship','interceptor','bomber','scout','trident','mantis','bulwark','striker'
+    ];
     const type = typePool[Math.floor(Math.random()*typePool.length)];
     const x = FIELD.x + 20 + Math.random()*(FIELD.w-40);
     const y = FIELD.y + 8;
@@ -245,12 +265,19 @@
 
   // Bosses --------------------------------------------------------
   function makeBoss(index){
-    const baseDps = 71; // ~7.1 bullets/s * 10 dmg
+    const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
     const hp = Math.round(baseDps * 60 * minutes * 1.5); // 1.5x HP
     const bx = FIELD.x + FIELD.w/2, by = FIELD.y + 84;
     const name = ['Aegis Mk I','Aegis Mk II','Aegis Mk III','Aegis Overlord'][index-1];
-    return { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0 };
+    const b = { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0, fireIndex:0 };
+    // Gun racks for first two bosses
+    if(index<=2){
+      const rack = [];
+      for(let i=-24;i<=24;i+=12){ rack.push({x:-48,y:i}); rack.push({x:48,y:i}); } // left/right racks
+      b.muzzles = rack;
+    }
+    return b;
   }
 
   function applyPower(type){
@@ -288,12 +315,11 @@
       drawBackground();
       drawRustWall();
 
-      // Clip to wall for unified start screen
+      // Clip to wall for unified start screen; no watermark here
       ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
       drawStartMenu();
       ctx.restore();
 
-      drawWatermark(); // faint effect even in menu
       ctx.restore();
       requestAnimationFrame(frame);
       return;
@@ -432,7 +458,7 @@
 
   function drawFrame(){
     drawBackground();
-    drawWatermark();
+    drawWatermark(); // includes "Created by Agrigorn"
     drawRustWall();
 
     // clip region = inside wall
@@ -469,7 +495,7 @@
   function drawStartMenu(){
     const t = performance.now()*0.001;
 
-    // background layers in the field
+    // background layers in the field (stars/planets)
     const g1 = ctx.createRadialGradient(WORLD.w*0.25, WORLD.h*0.25, 10, WORLD.w*0.25, WORLD.h*0.25, 180);
     g1.addColorStop(0,'rgba(70,120,200,.18)'); g1.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=g1; ctx.fillRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
@@ -493,29 +519,14 @@
       ctx.globalAlpha=1;
     }
 
-    // Big player sprite
-    const sprite = playerImgProcessed || playerImg;
-    if(sprite){
-      const iw = sprite.width, ih = sprite.height;
-      const target = Math.min(140, FIELD.w*0.7);
-      const s = target / Math.max(iw, ih);
-      ctx.save();
-      ctx.globalAlpha = 0.22;
-      ctx.translate(FIELD.x + FIELD.w/2, FIELD.y + FIELD.h*0.42);
-      ctx.scale(s, s);
-      ctx.drawImage(sprite, -iw/2, -ih/2, iw, ih);
-      ctx.restore();
-    }
-
-    // Logo and text
+    // Title (single Sign word)
     ctx.textAlign='center'; ctx.textBaseline='top';
     ctx.font='900 46px "Trebuchet MS", system-ui';
     const grad = ctx.createLinearGradient(0,0,0,60);
     grad.addColorStop(0,'#ffd08a'); grad.addColorStop(1,'#ff9a2a');
     ctx.fillStyle=grad; ctx.fillText('Sign', FIELD.x + FIELD.w/2, FIELD.y + 12);
-    ctx.shadowColor='rgba(255,140,40,.25)'; ctx.shadowBlur=18; ctx.fillText('Sign', FIELD.x + FIELD.w/2, FIELD.y + 12);
-    ctx.shadowBlur=0;
 
+    // Description
     ctx.fillStyle='#ffe6c9'; ctx.font='14px system-ui';
     const lines = [
       'Guide your ship through waves of enemies and collect Sign points.',
@@ -524,22 +535,37 @@
     let ty = FIELD.y + 64;
     for(const L of lines){ ctx.fillText(L, FIELD.x + FIELD.w/2, ty); ty += 16; }
 
-    // Power-up legend (icons)
+    // Legend (vertical list, centered)
     const legend = ['spread','rapid','side','shield','health','missile'];
-    const cx = FIELD.x + FIELD.w/2;
-    let rowY = FIELD.y + 110;
+    const startY = ty + 6;
     ctx.textAlign='left'; ctx.font='bold 12px system-ui'; ctx.fillStyle='#ffe6c9';
-    for(let i=0;i<legend.length;i++){
-      const x = cx - 90 + (i%3)*60;
-      const y = rowY + Math.floor(i/3)*34;
-      drawPowerupIconAt(x, y, legend[i]);
-      ctx.fillText(cap(legend[i]), x+20, y-8);
+    let y = startY;
+    for(const item of legend){
+      const x = FIELD.x + FIELD.w/2 - 60;
+      drawPowerupIconAt(x, y+10, item);
+      ctx.fillText(cap(item), x+24, y+3);
+      y += 28;
+    }
+
+    // Big player sprite (fully opaque), placed above Start button
+    const sprite = playerImgProcessed || playerImg;
+    let spriteBottom = y + 6;
+    if(sprite){
+      const iw = sprite.width, ih = sprite.height;
+      const target = Math.min(190, FIELD.w*0.82);
+      const s = target / Math.max(iw, ih);
+      ctx.save();
+      ctx.translate(FIELD.x + FIELD.w/2, spriteBottom + target*0.52);
+      ctx.scale(s, s);
+      ctx.drawImage(sprite, -iw/2, -ih/2, iw, ih); // opaque
+      ctx.restore();
+      spriteBottom += target + 8;
     }
 
     // Start button (styled)
-    const bw = 180, bh = 42;
+    const bw = 200, bh = 48;
     const bx = FIELD.x + FIELD.w/2 - bw/2;
-    const by = FIELD.y + FIELD.h - 70;
+    const by = Math.min(FIELD.y + FIELD.h - 66, spriteBottom);
     startBtn.x=bx; startBtn.y=by; startBtn.w=bw; startBtn.h=bh;
 
     const gbtn = ctx.createLinearGradient(0,by,0,by+bh);
@@ -548,14 +574,11 @@
     roundRect(ctx, bx,by,bw,bh,12); ctx.fill(); ctx.stroke();
 
     ctx.save();
-    ctx.font='900 22px "Trebuchet MS", system-ui';
+    ctx.font='900 24px "Trebuchet MS", system-ui';
     ctx.fillStyle = '#612800';
     ctx.textAlign='center';
-    ctx.fillText('Start', FIELD.x + FIELD.w/2, by+9);
+    ctx.fillText('Start', FIELD.x + FIELD.w/2, by+10);
     ctx.restore();
-
-    // Watermark sweep
-    drawWatermark();
   }
 
   // Drawing helpers ----------------------------------------------
@@ -586,7 +609,7 @@
     }
   }
 
-  // Watermark text + sweeping strip-light every 7s
+  // Watermark text + sweeping strip-light every 7s + credit line
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
@@ -596,11 +619,21 @@
     add(0, 'rgba(255,154,42,0.06)'); add(band-spread,'rgba(255,154,42,0.06)');
     add(band,'rgba(255,214,130,0.18)'); add(band+spread,'rgba(255,154,42,0.06)'); add(1,'rgba(255,154,42,0.06)');
 
+    const cx = WORLD.w/2, cy = WORLD.h/2;
     ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
+
+    // main watermark
     ctx.font='italic 64px "Trebuchet MS", Arial, sans-serif';
-    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Sign', WORLD.w/2, WORLD.h/2);
-    ctx.fillStyle=g; ctx.fillText('Sign', WORLD.w/2, WORLD.h/2);
+    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Sign', cx, cy);
+    ctx.fillStyle=g; ctx.fillText('Sign', cx, cy);
+
+    // tiny credit just below, same effect
+    const creditY = cy + 16; // minimal gap
+    ctx.font='bold 9px system-ui';
+    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Created by Agrigorn', cx, creditY);
+    ctx.fillStyle=g; ctx.fillText('Created by Agrigorn', cx, creditY);
+
     ctx.restore();
   }
 
@@ -708,11 +741,13 @@
     }
   }
 
-  // Enemy visuals (teal style) -----------------------------------
+  // Enemy visuals (teal style + crimson variants) ----------------
   function hullTeal(){ return '#2e6f75'; }
   function lineDark(){ return '#0f2830'; }
   function canopy(){ return '#ffb23c'; }
   function lightGlow(alpha){ return `rgba(255,166,49,${alpha})`; }
+  function hullRed(){ return '#c43a2b'; }
+  function trimRed(){ return '#651c16'; }
 
   function drawEngineFlame(x,y,wide=6,long=10){
     const t = performance.now()*0.003;
@@ -728,6 +763,44 @@
     ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(Math.PI);
     const blink = (Math.sin(e.t*6)+1)*0.5;
     switch(e.type){
+      // Crimson detailed variants (based on your red ship)
+      case 'crimson1':{
+        ctx.fillStyle=hullRed(); ctx.strokeStyle=trimRed(); ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.roundRect(-11,-16,22,30,6); ctx.fill(); ctx.stroke();
+        // wings
+        ctx.beginPath(); ctx.moveTo(-17,2); ctx.lineTo(-8,-6); ctx.lineTo(-8,8); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(17,2); ctx.lineTo(8,-6); ctx.lineTo(8,8); ctx.closePath(); ctx.fill(); ctx.stroke();
+        // canopy
+        ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-6,7,5,0,0,Math.PI*2); ctx.fill();
+        // pods
+        ctx.fillStyle=hullRed(); ctx.fillRect(-14,4,8,10); ctx.fillRect(6,4,8,10);
+        // stripes on pods
+        ctx.fillStyle='#ffb23c'; ctx.fillRect(-12,9,4,2); ctx.fillRect(-12,12,4,2);
+        ctx.fillRect(8,9,4,2); ctx.fillRect(8,12,4,2);
+        drawEngineFlame(-10,12,4,11); drawEngineFlame(10,12,4,11);
+        break;
+      }
+      case 'crimson2':{
+        ctx.fillStyle=hullRed(); ctx.strokeStyle=trimRed(); ctx.lineWidth=1.6;
+        // arrow hull
+        ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(12,8); ctx.lineTo(0,12); ctx.lineTo(-12,8); ctx.closePath(); ctx.fill(); ctx.stroke();
+        // details dots
+        ctx.fillStyle='rgba(175,92,217,.9)'; ctx.beginPath(); ctx.arc(-6,-2,1.6,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6,-2,1.6,0,Math.PI*2); ctx.fill();
+        // canopy
+        ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-5,5.5,4.2,0,0,Math.PI*2); ctx.fill();
+        drawEngineFlame(0,10,5,12);
+        break;
+      }
+      case 'crimson3':{
+        ctx.fillStyle=hullRed(); ctx.strokeStyle=trimRed(); ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.roundRect(-12,-12,24,24,6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-3,6,4.6,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='rgba(175,92,217,.9)'; ctx.fillRect(-3,3,6,2);
+        drawEngineFlame(-6,10,3.5,10); drawEngineFlame(6,10,3.5,10);
+        break;
+      }
+      // Teal set
       case 'gunship':{
         ctx.fillStyle=hullTeal(); ctx.strokeStyle=lineDark(); ctx.lineWidth=1.6;
         ctx.beginPath(); ctx.roundRect(-10,-15,20,26,6); ctx.fill(); ctx.stroke();
@@ -780,7 +853,7 @@
     ctx.restore();
   }
 
-  // BOSSES — teal motif with animated glows ----------------------
+  // BOSSES — teal motif; first two with gun racks ----------------
   function bossHull(){ return '#2e6f75'; }
   function bossTrim(){ return '#12333a'; }
 
@@ -796,14 +869,33 @@
     ctx.fillStyle=`rgba(255,178,60,${0.5+0.5*glow})`;
     ctx.beginPath(); ctx.ellipse(0,-10,20,14,0,0,Math.PI*2); ctx.fill();
 
-    // rotating side cannons
-    ctx.save(); ctx.rotate(b.rot*0.6);
-    for(const side of [-1,1]){
-      ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim();
-      ctx.beginPath(); ctx.roundRect(side*(bw/2-18)-10,-6,20,12,4); ctx.fill(); ctx.stroke();
-      ctx.fillStyle='rgba(255,166,49,.7)'; ctx.fillRect(side*(bw/2-6)-2,-3,4,6);
+    // gun racks (boss 1 and 2)
+    if(b.muzzles){
+      ctx.save();
+      ctx.fillStyle='#2a3c44'; ctx.strokeStyle=bossTrim(); ctx.lineWidth=1.5;
+      // left rack arm
+      ctx.beginPath(); ctx.roundRect(-bw/2-6,-28,14,56,6); ctx.fill(); ctx.stroke();
+      // right rack arm
+      ctx.beginPath(); ctx.roundRect(bw/2-8,-28,14,56,6); ctx.fill(); ctx.stroke();
+      // barrels and muzzle glow
+      for(const m of b.muzzles){
+        const xx = m.x, yy = m.y;
+        ctx.fillStyle='#435a62';
+        ctx.beginPath(); ctx.roundRect(xx-3,yy-2,6,8,2); ctx.fill();
+        ctx.fillStyle='rgba(255,166,49,.75)';
+        ctx.fillRect(xx-1,yy+4,2,2);
+      }
+      ctx.restore();
+    }else{
+      // rotating side cannons (other bosses)
+      ctx.save(); ctx.rotate(b.rot*0.6);
+      for(const side of [-1,1]){
+        ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim();
+        ctx.beginPath(); ctx.roundRect(side*(bw/2-18)-10,-6,20,12,4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle='rgba(255,166,49,.7)'; ctx.fillRect(side*(bw/2-6)-2,-3,4,6);
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
     // engine flames at bottom
     drawEngineFlame(-24, bh/2-8, 6, 16);
@@ -820,14 +912,24 @@
   }
   function bossShoot(b){
     const add = (x,y,vx,vy)=> eBullets.push({x,y,vx,vy});
-    if(b.phase===1){
-      for(let a=-0.25;a<=0.25;a+=0.25) add(b.x,b.y+30, Math.sin(a)*130, 190);
-    }else if(b.phase===2){
-      for(let i=-2;i<=2;i++){ const a=i*0.18; add(b.x,b.y+30, Math.sin(a)*150, 210); }
+    if(b.muzzles){
+      // staggered rack fire downward, alternate sides
+      for(let i=0;i<4;i++){
+        const m = b.muzzles[(b.fireIndex + i*2) % b.muzzles.length];
+        add(b.x+m.x, b.y+m.y+8, 0, 230);
+      }
+      b.fireIndex = (b.fireIndex+1) % b.muzzles.length;
     }else{
-      const a=b.patternAngle*4;
-      add(b.x+Math.cos(a)*36,b.y+26, Math.cos(a)*170, 230);
-      add(b.x+Math.cos(a+Math.PI)*36,b.y+26, Math.cos(a+Math.PI)*170, 230);
+      // fallback patterns for other bosses
+      if(b.phase===1){
+        for(let a=-0.25;a<=0.25;a+=0.25) add(b.x,b.y+30, Math.sin(a)*130, 190);
+      }else if(b.phase===2){
+        for(let i=-2;i<=2;i++){ const a=i*0.18; add(b.x,b.y+30, Math.sin(a)*150, 210); }
+      }else{
+        const a=b.patternAngle*4;
+        add(b.x+Math.cos(a)*36,b.y+26, Math.cos(a)*170, 230);
+        add(b.x+Math.cos(a+Math.PI)*36,b.y+26, Math.cos(a+Math.PI)*170, 230);
+      }
     }
   }
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
@@ -886,7 +988,8 @@
   }
   // Legend icon renderer for Start UI
   function drawPowerupIconAt(x,y,type){
-    ctx.save(); ctx.translate(x,y);
+    ctx.save();
+    ctx.translate(x,y);
     ctx.fillStyle='rgba(255,180,80,.12)';
     roundRect(ctx,-14,-14,28,28,6); ctx.fill();
     ctx.translate(-1,0);
