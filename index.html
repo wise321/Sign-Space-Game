@@ -3,21 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Seeing Signs — Retro Descent v4</title>
+<title>Seeing Signs — Retro Descent (fixed)</title>
 <style>
   :root{
     --bg:#05070d;
     --wall1:#ffb23c;
     --wall2:#cc7a17;
     --ui:#98e7ff;
-    --danger:#ff5d6c;
     --text:#eaf4ff;
   }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
     font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden;touch-action:none;
     -webkit-user-select:none;user-select:none}
   canvas{display:block;width:100vw;height:100vh;background:radial-gradient(ellipse at 50% 35%, #0b1227 0%, #071024 60%, #05070d 100%);}
-  /* Top UI (outside border) */
+  /* Top UI (outside border, never overlaps) */
   #topUI{position:fixed;top:6px;left:50%;transform:translateX(-50%);
     display:flex;gap:8px;align-items:center;z-index:4;pointer-events:none}
   .bar{width:clamp(180px,72vw,260px);height:14px;border-radius:10px;padding:2px;background:rgba(255,255,255,.06);
@@ -26,65 +25,46 @@
     box-shadow:0 0 16px rgba(60,220,255,.6);transition:width .12s ease-out;}
   .pill{min-width:62px;text-align:center;font-weight:800;font-size:12px;padding:6px 10px;border-radius:999px;
     background:rgba(255,255,255,.08);box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
-  /* Overlays */
-  .overlay{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(0,0,0,.75),rgba(0,0,0,.85));z-index:10}
-  .card{width:min(860px,92vw);max-height:90vh;overflow:auto;background:#0a1120;border:1px solid #1f2a45;border-radius:16px;box-shadow:0 18px 70px rgba(0,0,0,.6);padding:18px 20px}
-  h1{margin:4px 0 8px;font-size:clamp(24px,3.4vw,36px);color:var(--wall1)}
-  p{line-height:1.5}
-  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-  .btn{appearance:none;border:none;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#022337;box-shadow:0 6px 22px rgba(0,220,255,.3), inset 0 1px 0 rgba(255,255,255,.5)}
-  .btn.alt{background:#1e2b4d;color:#d6e6ff;border:1px solid #2b3a63}
-  .hint{opacity:.7}
+  /* Start overlay — Start button only */
+  #start{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.8);z-index:10}
+  #playBtn{appearance:none;border:none;border-radius:999px;padding:14px 26px;font-size:18px;font-weight:900;cursor:pointer;
+    background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#05222e;box-shadow:0 10px 30px rgba(0,220,255,.3), inset 0 1px 0 rgba(255,255,255,.5)}
+  /* Game Over */
+  #gameOver{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.8);z-index:10;color:#eaf4ff}
+  .overCard{background:#0a1120;border:1px solid #1f2a45;border-radius:14px;box-shadow:0 18px 70px rgba(0,0,0,.6);padding:16px 18px;text-align:center}
+  .btn{appearance:none;border:none;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#18e2ff,#00b2d6);color:#022337;margin:8px}
 </style>
 </head>
 <body>
   <canvas id="game" aria-label="Seeing Signs: Retro Descent"></canvas>
 
-  <!-- Outside (always above, outside the wall) -->
+  <!-- Outside (always above the wall) -->
   <div id="topUI">
     <div class="bar"><span id="timeFill"></span></div>
     <div class="pill">Lv <span id="levelTxt">1</span></div>
   </div>
 
-  <!-- Start -->
-  <div class="overlay" id="start">
-    <div class="card">
-      <h1>Seeing Signs — Retro Descent</h1>
-      <p>Place your sprite image as <b>player.png</b> next to this file (or in <b>assets/player.png</b>). The game loads it automatically.</p>
-      <ul>
-        <li>PC: WASD or Arrow keys</li>
-        <li>Mobile: touch anywhere. The stick is anchored to your ship; direction changes are instant.</li>
-        <li>Auto‑fire is always on. Levels last 30 seconds. Boss at 5/10/15/20.</li>
-      </ul>
-      <div class="row">
-        <button class="btn" id="playBtn">Start</button>
-        <button class="btn alt" id="demoBtn">Start with Random Power‑ups</button>
-      </div>
-      <p class="hint" style="margin-top:8px">If you see a triangle, your player.png wasn’t found (check filename and folder). It will switch automatically once the image loads.</p>
-    </div>
-  </div>
+  <!-- Start (only Start button) -->
+  <div id="start"><button id="playBtn">Start</button></div>
 
   <!-- Game Over -->
-  <div class="overlay" id="gameOver" style="display:none">
-    <div class="card">
-      <h1>Game Over</h1>
-      <p id="summary">Score: 0 — Level reached: 1</p>
-      <div class="row">
-        <button class="btn" id="restartBtn">Restart</button>
-        <button class="btn alt" id="toStartBtn">Back to Start</button>
-      </div>
+  <div id="gameOver">
+    <div class="overCard">
+      <div id="summary" style="margin-bottom:10px;font-weight:700">Score: 0 — Level 1</div>
+      <button class="btn" id="restartBtn">Restart</button>
     </div>
   </div>
 
 <script>
 (() => {
-  // Fixed mobile-like world (360x640)
+  // Fixed 360x640 "mobile" world; scales to any screen
   const WORLD = { w: 360, h: 640 };
-  const FIELD = { x: 10, y: 64, w: WORLD.w-20, h: WORLD.h-74 }; // wall area
+  const FIELD = { x: 10, y: 64, w: WORLD.w-20, h: WORLD.h-74 }; // playfield inside the wall
+
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
-  // Scale to screen but keep world proportions
+  // Scale to screen, keep aspect
   let scale=1, padX=0, padY=0, dpr=1;
   function resize(){
     dpr = Math.max(1, window.devicePixelRatio||1);
@@ -97,36 +77,26 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // UI elements
-  const topUI = document.getElementById('topUI');
+  // UI
   const timeFill = document.getElementById('timeFill');
   const levelTxt = document.getElementById('levelTxt');
   const start = document.getElementById('start');
   const playBtn = document.getElementById('playBtn');
-  const demoBtn = document.getElementById('demoBtn');
   const over = document.getElementById('gameOver');
   const summary = document.getElementById('summary');
   const restartBtn = document.getElementById('restartBtn');
-  const toStartBtn = document.getElementById('toStartBtn');
 
-  // Player image auto-load (robust)
-  let playerImg = null, playerImgTried = false, playerImgMissing=false;
-  function loadPlayerImage(){
-    if(playerImgTried) return;
-    playerImgTried = true;
+  // Auto-load player.png (or assets/player.png)
+  let playerImg = null, playerImgMissing=false;
+  (async function preloadPlayer(){
     const tryLoad = (src) => new Promise(res=>{
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => res(img);
-      img.onerror = () => res(null);
-      img.src = src + '?v=' + Date.now(); // bust cache
+      const img = new Image(); img.crossOrigin='anonymous';
+      img.onload = () => res(img); img.onerror = () => res(null);
+      img.src = src + '?v=' + Date.now();
     });
-    (async () => {
-      playerImg = await tryLoad('player.png') || await tryLoad('./assets/player.png');
-      if(!playerImg) playerImgMissing = true;
-    })();
-  }
-  loadPlayerImage();
+    playerImg = await tryLoad('player.png') || await tryLoad('./assets/player.png');
+    if(!playerImg) playerImgMissing = true;
+  })();
 
   // State
   let running=false, lastTime=0;
@@ -145,7 +115,7 @@
   };
 
   const LEVEL_TIME = 30;
-  let levelTime=0, demo=false;
+  let levelTime=0;
 
   // Input (PC)
   window.addEventListener('keydown', e=>{
@@ -161,7 +131,7 @@
     if(['ArrowDown','KeyS'].includes(e.code)) keys.delete('down');
   });
 
-  // Player-anchored stick
+  // Player-anchored stick (instant direction)
   canvas.addEventListener('pointerdown', e=>{
     const p = clientToWorld(e.clientX,e.clientY);
     stick.active = true; stick.x = p.x; stick.y = p.y;
@@ -171,19 +141,13 @@
     const p = clientToWorld(e.clientX,e.clientY);
     stick.x = p.x; stick.y = p.y;
   }, {passive:true});
-  const endStick=()=>{ stick.active=false; };
-  canvas.addEventListener('pointerup', endStick);
-  canvas.addEventListener('pointercancel', endStick);
-  canvas.addEventListener('lostpointercapture', endStick);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev => canvas.addEventListener(ev, ()=>stick.active=false));
 
   // Start / restart
-  playBtn.onclick = ()=>{ demo=false; startGame(); };
-  demoBtn.onclick = ()=>{ demo=true; startGame(); };
-  restartBtn.onclick = ()=>{ over.style.display='none'; demo=false; startGame(); };
-  toStartBtn.onclick = ()=>{ over.style.display='none'; start.style.display='grid'; };
+  playBtn.onclick = ()=>{ startGame(); };
+  restartBtn.onclick = ()=>{ over.style.display='none'; startGame(); };
 
   function startGame(){
-    loadPlayerImage();
     Object.assign(player, {
       x: FIELD.x + FIELD.w/2, y: FIELD.y + FIELD.h - 90, vx:0, vy:0, invuln:1.0, lives:3,
       fireTimer:0, score:0, collected:0, level:1,
@@ -194,7 +158,6 @@
     levelTime=0; timeFill.style.width='0%'; levelTxt.textContent='1';
     start.style.display='none'; over.style.display='none';
     running=true;
-    if(demo){ player.rapid=20; player.spread=20; player.side=20; player.pierce=20; }
     enterLevel(1);
     lastTime=performance.now();
     requestAnimationFrame(frame);
@@ -202,7 +165,7 @@
 
   function gameOver(){
     running=false;
-    summary.textContent = `Score: ${player.score} — Level reached: ${player.level} — Collected Sign: ${player.collected}`;
+    summary.textContent = `Score: ${player.score} — Level ${player.level} — Collected Sign: ${player.collected}`;
     over.style.display='grid';
   }
 
@@ -219,7 +182,7 @@
     enterLevel(n);
   }
 
-  // Spawning (inside wall; straight down)
+  // Spawning
   let spawnTimer=0, signTimer=0, powerTimer=0;
   function spawnEnemy(){
     if(isBossLevel(player.level)) return;
@@ -259,13 +222,12 @@
     if(type==='side')  player.side  = Math.max(player.side,  DUR);
     if(type==='pierce')player.pierce= Math.max(player.pierce,DUR);
     if(type==='shield')player.shield= Math.max(player.shield,DUR);
-    if(type==='magnet')player.magnet= Math.max(player.magnet,DUR); // expanded pickup radius
-    // quick floating label
+    if(type==='magnet')player.magnet= Math.max(player.magnet,DUR);
     effects.push({x:player.x,y:player.y-24,vx:0,vy:-30,life:0.8,t:0,label:type});
   }
 
-  // Background assets: stars + planets
-  const stars = Array.from({length:120}, (_,i)=>({x:Math.random()*WORLD.w,y:Math.random()*WORLD.h,z:0.3+Math.random()*0.9,p:Math.random()*6}));
+  // Background: stars + planets
+  const stars = Array.from({length:120}, ()=>({x:Math.random()*WORLD.w,y:Math.random()*WORLD.h,z:0.3+Math.random()*0.9,p:Math.random()*6}));
   const planets = [
     {x:60, y:120, r:22, col:'#ff9a2a', ring:true, vy:4},
     {x:300, y:220, r:16, col:'#7bc8ff', ring:false, vy:5},
@@ -278,12 +240,12 @@
     if(!running) return;
     const dt = Math.min(0.033, (ts-lastTime)/1000); lastTime=ts;
 
-    // Timer / levels
+    // Level timer
     if(!isBossLevel(player.level)){
       levelTime += dt;
-      const pct = Math.min(1, levelTime/LEVEL_TIME);
+      const pct = Math.min(1, levelTime/30);
       timeFill.style.width = (pct*100).toFixed(1)+'%';
-      if(levelTime>=LEVEL_TIME){ nextLevel(); }
+      if(levelTime>=30){ nextLevel(); }
     }
 
     // Power timers
@@ -295,22 +257,11 @@
     let ax=0, ay=0;
     if(keys.has('left')) ax-=1; if(keys.has('right')) ax+=1;
     if(keys.has('up')) ay-=1; if(keys.has('down')) ay+=1;
-
     if(stick.active){
-      const dx = stick.x - player.x, dy = stick.y - player.y;
-      const m = Math.hypot(dx,dy);
-      if(m>1){
-        ax = dx/m; ay = dy/m;
-        const boost = Math.min(1.6, 0.6 + m/40); // farther finger = faster glide
-        player.vx = ax * player.speed * boost;
-        player.vy = ay * player.speed * boost;
-      }else{
-        player.vx = player.vy = 0;
-      }
-    }else{
-      player.vx = ax * player.speed;
-      player.vy = ay * player.speed;
-    }
+      const dx = stick.x - player.x, dy = stick.y - player.y, m = Math.hypot(dx,dy);
+      if(m>1){ ax = dx/m; ay = dy/m; const boost = Math.min(1.6, 0.6 + m/40); player.vx = ax*player.speed*boost; player.vy = ay*player.speed*boost; }
+      else { player.vx=player.vy=0; }
+    }else{ player.vx = ax*player.speed; player.vy = ay*player.speed; }
     player.x = clamp(player.x + player.vx*dt, FIELD.x+12, FIELD.x+FIELD.w-12);
     player.y = clamp(player.y + player.vy*dt, FIELD.y+12, FIELD.y+FIELD.h-12);
 
@@ -331,11 +282,11 @@
     // Enemies (straight down)
     for(let i=enemies.length-1;i>=0;i--){
       const e=enemies[i]; e.t+=dt; e.y += e.vy*dt;
-      if(e.y > FIELD.y + FIELD.h + 20){ enemies.splice(i,1); continue; } // no penalty
+      if(e.y > FIELD.y + FIELD.h + 20){ enemies.splice(i,1); continue; } // no penalty for passing
       if(circleHit(player,e, player.r+e.r-2)){ hitPlayer(); enemies.splice(i,1); }
     }
 
-    // Boss
+    // Boss (if present)
     if(boss){
       boss.t += dt; boss.patternAngle += dt;
       const hpPct = boss.hp/boss.hpMax;
@@ -354,11 +305,7 @@
           const e=enemies[j];
           if(circleHit(b,e, e.r+2)){
             e.hp -= b.dmg;
-            if(e.hp<=0){
-              spawnPop(e.x,e.y);
-              enemies.splice(j,1);
-              if(Math.random()<0.5) signs.push({x:e.x,y:e.y,vy:175,t:0});
-            }
+            if(e.hp<=0){ spawnPop(e.x,e.y); enemies.splice(j,1); if(Math.random()<0.5) signs.push({x:e.x,y:e.y,vy:175,t:0}); }
             if(b.pierce>0){ b.pierce--; } else { bullets.splice(i,1); }
             break;
           }
@@ -394,49 +341,30 @@
       else if(p.y>FIELD.y+FIELD.h+16) powerups.splice(i,1);
     }
 
-    // Effects (labels/particles)
+    // Effects
     for(let i=effects.length-1;i>=0;i--){
       const f=effects[i]; f.t+=dt; f.x+=(f.vx||0)*dt; f.y+=(f.vy||0)*dt;
-      if(f.label){
-        const alpha = Math.max(0,1 - f.t/f.life);
-        f.alpha = alpha;
-      }
+      if(f.label){ f.alpha = Math.max(0,1 - f.t/f.life); }
       if(f.t>f.life) effects.splice(i,1);
     }
 
-    // Render ----------------------------------------------------
+    // Render
     ctx.setTransform(scale,0,0,scale,0,0);
     ctx.clearRect(0,0, canvas.width/scale, canvas.height/scale);
-    ctx.save();
-    ctx.translate(padX, padY);
+    ctx.save(); ctx.translate(padX, padY);
 
     drawBackground();
-
     drawRustWall();
-
-    // HUD inside wall (hearts + counter + buff icons)
     drawHUDInside();
 
-    // Signs
     for(const s of signs) drawSign(s);
-
-    // Powerups
     for(const p of powerups) drawPowerup(p);
-
-    // Enemies
     for(const e of enemies) drawEnemy(e);
-
-    // Boss
     if(boss) drawBoss(boss);
-
-    // Player
     drawPlayer();
-
-    // Bullets
     drawBullets(bullets, true);
     drawBullets(eBullets, false);
 
-    // Effects (labels/particles)
     for(const f of effects){
       if(f.label){
         ctx.globalAlpha = f.alpha||1;
@@ -447,10 +375,8 @@
         ctx.globalAlpha = 1;
       }else{
         const alpha = Math.max(0, 1 - f.t/f.life);
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = f.color || '#fff';
-        ctx.fillRect(f.x-1.2, f.y-1.2, 2.4, 2.4);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = alpha; ctx.fillStyle = f.color || '#fff';
+        ctx.fillRect(f.x-1.2, f.y-1.2, 2.4, 2.4); ctx.globalAlpha = 1;
       }
     }
 
@@ -458,7 +384,7 @@
     requestAnimationFrame(frame);
   }
 
-  // Drawing helpers --------------------------------------------
+  // Drawing helpers
   function drawBackground(){
     const t = performance.now()*0.001;
     // stars (twinkle)
@@ -472,32 +398,21 @@
     ctx.globalAlpha = 1;
     // planets drift
     for(const p of planets){
-      p.y += p.vy*0.016;
-      if(p.y > WORLD.h + 40){ p.y = -40; }
-      // glow
+      p.y += p.vy*0.016; if(p.y > WORLD.h + 40){ p.y = -40; }
       const g = ctx.createRadialGradient(p.x-6,p.y-6,4, p.x,p.y,p.r+10);
-      g.addColorStop(0, 'rgba(255,255,255,.2)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
+      g.addColorStop(0, 'rgba(255,255,255,.2)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,p.r+10,0,Math.PI*2); ctx.fill();
-      // body
       ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-      // ring
-      if(p.ring){
-        ctx.strokeStyle='rgba(255,230,180,.7)'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.ellipse(p.x,p.y+1,p.r+6,p.r/2,0,0,Math.PI*2); ctx.stroke();
-      }
+      if(p.ring){ ctx.strokeStyle='rgba(255,230,180,.7)'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(p.x,p.y+1,p.r+6,p.r/2,0,0,Math.PI*2); ctx.stroke(); }
     }
   }
 
   function drawRustWall(){
-    // Outer glow rim
     ctx.strokeStyle = 'rgba(255,180,80,.25)'; ctx.lineWidth = 10;
     ctx.strokeRect(FIELD.x-3, FIELD.y-3, FIELD.w+6, FIELD.h+6);
-    // Main rustic border (thicker, metallic orange)
     const g = ctx.createLinearGradient(0,FIELD.y,0,FIELD.y+FIELD.h);
     g.addColorStop(0,'#ffb23c'); g.addColorStop(1,'#cc7a17');
     ctx.strokeStyle = g; ctx.lineWidth = 6.5; ctx.strokeRect(FIELD.x, FIELD.y, FIELD.w, FIELD.h);
-    // Rivet dots
     ctx.fillStyle='rgba(255,255,255,.2)';
     for(let x=FIELD.x+10; x<FIELD.x+FIELD.w-10; x+=26){ ctx.fillRect(x, FIELD.y-2, 2,2); ctx.fillRect(x, FIELD.y+FIELD.h, 2,2); }
     for(let y=FIELD.y+10; y<FIELD.y+FIELD.h-10; y+=26){ ctx.fillRect(FIELD.x-2,y,2,2); ctx.fillRect(FIELD.x+FIELD.w,y,2,2); }
@@ -505,14 +420,13 @@
 
   function drawHUDInside(){
     const pad = 8;
-    // Health hearts at top-right
+    // hearts top-right
     let hx = FIELD.x + FIELD.w - pad, hy = FIELD.y + pad + 2;
     for(let i=0;i<player.lives;i++) drawHeart(hx - i*14, hy, 6);
-    // Tiny "Collected Sign"
+    // collected count
     ctx.fillStyle='#cfe5ff'; ctx.font='10px system-ui'; ctx.textAlign='right'; ctx.textBaseline='top';
     ctx.fillText(`Collected Sign: ${player.collected}`, FIELD.x+FIELD.w-pad, hy+14);
-
-    // Small buff icons row (top-left)
+    // active buffs tags (top-left)
     let bx = FIELD.x + pad, by = FIELD.y + pad + 2;
     const act = [];
     if(player.spread>0) act.push('Sp');
@@ -531,8 +445,7 @@
   }
   function drawHeart(x,y,r){
     ctx.save(); ctx.translate(x,y); ctx.fillStyle='#ff6b81';
-    ctx.beginPath();
-    ctx.moveTo(0, r);
+    ctx.beginPath(); ctx.moveTo(0, r);
     ctx.bezierCurveTo(r, r-6, r, -r/2, 0, -r/3);
     ctx.bezierCurveTo(-r, -r/2, -r, r-6, 0, r);
     ctx.fill(); ctx.restore();
@@ -542,27 +455,21 @@
     const px = player.x, py = player.y;
     if(playerImg){
       const iw = playerImg.width, ih = playerImg.height;
-      const target = 34; const s = target / Math.max(iw, ih);
+      const s = 34 / Math.max(iw, ih);
       ctx.save(); ctx.translate(px, py); ctx.scale(s, s);
       ctx.drawImage(playerImg, -iw/2, -ih/2, iw, ih); ctx.restore();
     }else{
-      // minimal fallback + hint if missing file
+      // fallback arrow if player.png missing
       ctx.save(); ctx.translate(px,py);
       ctx.fillStyle='#f5d14a'; ctx.strokeStyle='#6a4b00'; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(-16,-10); ctx.lineTo(-8,0); ctx.lineTo(-16,10); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
-      if(playerImgMissing){
-        ctx.fillStyle='rgba(255,255,255,.65)'; ctx.font='10px system-ui';
-        ctx.textAlign='center'; ctx.fillText('player.png not found', px, py-26);
-      }
     }
-    // Side pods visible when active
     if(player.side>0){
       ctx.fillStyle='#ffd96a'; ctx.strokeStyle='#6a540e'; ctx.lineWidth=1.2;
       ctx.beginPath(); ctx.roundRect(px-20,py-6,6,12,3); ctx.fill(); ctx.stroke();
       ctx.beginPath(); ctx.roundRect(px+14,py-6,6,12,3); ctx.fill(); ctx.stroke();
     }
-    // Shield aura
     if(player.shield>0){
       ctx.strokeStyle='rgba(80,220,255,.8)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.ellipse(px,py,20,22,0,0,Math.PI*2); ctx.stroke();
@@ -572,19 +479,15 @@
   function drawBullets(arr, friendly){
     for(const b of arr){
       if(friendly){
-        // Visual feedback: pierce is cyan, default is warm
         ctx.strokeStyle = (b.pierce>0) ? '#86f7ff' : '#fffbd1';
-        ctx.lineWidth = 2;
-        // brief muzzle glow
-        ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x, b.y+5); ctx.stroke();
+        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x, b.y+5); ctx.stroke();
       }else{
-        ctx.fillStyle = '#ff6a6a';
-        ctx.beginPath(); ctx.arc(b.x,b.y,2.4,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff6a6a'; ctx.beginPath(); ctx.arc(b.x,b.y,2.4,0,Math.PI*2); ctx.fill();
       }
     }
   }
 
-  // Enemy engine flame + extra animations
+  // Enemy flames + extra anim
   function drawEngineFlame(x,y,wide=6,long=10){
     const t = performance.now()*0.003;
     const len = long + Math.sin(t*9+y)*2;
@@ -595,23 +498,18 @@
     ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(x, y+len*0.6, wide*0.55, len, 0, 0, Math.PI*2); ctx.fill();
   }
 
-  // Enemies — detailed and facing downward (rotated)
+  // Enemies — face downward
   function drawEnemy(e){
-    ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(Math.PI); // face down
+    ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(Math.PI);
     const blink = (Math.sin(e.t*6)+1)*0.5;
     switch(e.type){
       case 'redRocket': {
         ctx.fillStyle='#ef4545'; ctx.strokeStyle='#6b1a1a'; ctx.lineWidth=1.4;
         ctx.beginPath(); ctx.roundRect(-9,-16,18,28,6); ctx.fill(); ctx.stroke();
-        // panel glow
         ctx.fillStyle=`rgba(255,220,170,${0.25+0.5*blink})`; ctx.fillRect(-6,-2,12,4);
-        // canopy
         ctx.fillStyle='#234463'; ctx.beginPath(); ctx.ellipse(0,-6,6,5,0,0,Math.PI*2); ctx.fill();
-        // wings wiggle
-        const wig = Math.sin(e.t*8)*1.2;
-        ctx.fillStyle='#a21f1f'; ctx.fillRect(-14+wig,2,8,6); ctx.fillRect(6-wig,2,8,6);
-        drawEngineFlame(0,12,6,14);
-        break;
+        const wig = Math.sin(e.t*8)*1.2; ctx.fillStyle='#a21f1f'; ctx.fillRect(-14+wig,2,8,6); ctx.fillRect(6-wig,2,8,6);
+        drawEngineFlame(0,12,6,14); break;
       }
       case 'blueRocket': {
         ctx.fillStyle='#5aa5ff'; ctx.strokeStyle='#1c3a6b'; ctx.lineWidth=1.4;
@@ -619,43 +517,35 @@
         ctx.fillStyle='#183154'; ctx.beginPath(); ctx.ellipse(0,-8,5,4,0,0,Math.PI*2); ctx.fill();
         ctx.fillStyle=`rgba(143,194,255,${0.4+0.4*blink})`; ctx.fillRect(-8,-2,16,2);
         ctx.fillStyle='#3766a8'; ctx.fillRect(-12,4,8,5); ctx.fillRect(4,4,8,5);
-        drawEngineFlame(0,12,5,13);
-        break;
+        drawEngineFlame(0,12,5,13); break;
       }
       case 'whiteOrange': {
         ctx.fillStyle='#eaecef'; ctx.strokeStyle='#61646b'; ctx.lineWidth=1.2;
         ctx.beginPath(); ctx.roundRect(-8,-18,16,30,6); ctx.fill(); ctx.stroke();
         ctx.fillStyle=`rgba(255,178,60,${0.5+0.4*blink})`; ctx.fillRect(-8,2,16,3);
         ctx.fillStyle='#2d3f5c'; ctx.beginPath(); ctx.ellipse(0,-6,4.5,4,0,0,Math.PI*2); ctx.fill();
-        drawEngineFlame(0,12,5.5,14);
-        break;
+        drawEngineFlame(0,12,5.5,14); break;
       }
       case 'domeUFO': {
-        // rotating little lights
         ctx.fillStyle='#ffcf6a'; ctx.strokeStyle='#6a4b00'; ctx.lineWidth=1.2;
         ctx.beginPath(); ctx.ellipse(0,6,16,6,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
         ctx.fillStyle='#98d7ff'; ctx.beginPath(); ctx.ellipse(0,-2,10,7,0,0,Math.PI*2); ctx.fill();
-        // lights
         ctx.fillStyle='rgba(255,240,200,.8)';
         for(let i=0;i<4;i++){ const a=e.t*3 + i*Math.PI/2; ctx.beginPath(); ctx.arc(Math.cos(a)*10, 6+Math.sin(a)*1.2, 1.2, 0, Math.PI*2); ctx.fill(); }
-        drawEngineFlame(-8,10,3.5,9); drawEngineFlame(8,10,3.5,9);
-        break;
+        drawEngineFlame(-8,10,3.5,9); drawEngineFlame(8,10,3.5,9); break;
       }
       case 'ringSaucer': {
         ctx.fillStyle='#f2b36c'; ctx.strokeStyle='#6b3a0f'; ctx.lineWidth=1.2;
         ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
         ctx.save(); ctx.rotate(Math.sin(e.t*2)*0.15);
-        ctx.strokeStyle='rgba(240,210,160,.9)'; ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,Math.PI*2); ctx.stroke();
-        ctx.restore();
-        drawEngineFlame(-6,8,3,9); drawEngineFlame(6,8,3,9);
-        break;
+        ctx.strokeStyle='rgba(240,210,160,.9)'; ctx.beginPath(); ctx.ellipse(0,2,20,6,0,0,Math.PI*2); ctx.stroke(); ctx.restore();
+        drawEngineFlame(-6,8,3,9); drawEngineFlame(6,8,3,9); break;
       }
       case 'diamondShip': {
         ctx.fillStyle='#cde1ff'; ctx.strokeStyle='#224565'; ctx.lineWidth=1.2;
         ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(10,0); ctx.lineTo(0,12); ctx.lineTo(-10,0); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.fillStyle=`rgba(137,183,255,${0.4+0.4*blink})`; ctx.fillRect(-8,-1,16,2);
-        drawEngineFlame(0,10,4.5,11);
-        break;
+        drawEngineFlame(0,10,4.5,11); break;
       }
     }
     ctx.restore();
@@ -685,7 +575,7 @@
     ctx.restore();
   }
 
-  // Boss visuals/shooting (as before)
+  // Boss draw and shoot
   function drawBoss(b){
     ctx.save(); ctx.translate(b.x,b.y);
     const metal = (x0,y0,x1,y1,c1,c2)=>{const g=ctx.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,c1);g.addColorStop(1,c2);return g;};
@@ -700,7 +590,6 @@
     }
     ctx.restore();
   }
-  const eBullets = []; // already declared above, kept here for clarity
   function bossShoot(b){
     const add = (x,y,vx,vy)=> eBullets.push({x,y,vx,vy});
     if(b.index===1){
@@ -722,7 +611,7 @@
     }
   }
 
-  // Signs (orange glow)
+  // Signs
   function drawSign(s){
     ctx.save(); ctx.translate(s.x,s.y);
     ctx.font='italic 12px "Trebuchet MS", Arial, sans-serif';
@@ -742,18 +631,11 @@
     if(player.side>0){ add(player.x-14,player.y-10,0,speed*0.96); add(player.x+14,player.y-10,0,speed*0.96); }
   }
 
-  // Utilities
+  // Utils
   function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
   function circleHit(a,b, r){ const dx=(a.x-b.x), dy=(a.y-b.y); return dx*dx+dy*dy <= r*r; }
   function pointInRect(x,y, rx,ry,rw,rh){ return x>=rx && x<=rx+rw && y>=ry && y<=ry+rh; }
-  function clientToWorld(cx,cy){
-    const rect = canvas.getBoundingClientRect();
-    const px = (cx-rect.left) * (canvas.width/rect.width);
-    const py = (cy-rect.top) * (canvas.height/rect.height);
-    const x = px/scale - padX;
-    const y = py/scale - padY;
-    return { x, y };
-  }
+  function clientToWorld(cx,cy){ const r=canvas.getBoundingClientRect(); const px=(cx-r.left)*(canvas.width/r.width), py=(cy-r.top)*(canvas.height/r.height); return { x:px/scale - padX, y:py/scale - padY }; }
 
   function loseLife(){ if(player.invuln>0) return; player.lives--; player.invuln=1; if(player.lives<=0) gameOver(); }
   function hitPlayer(){
@@ -765,8 +647,37 @@
   function spawnPop(x,y){ for(let i=0;i<12;i++){ effects.push({x,y,vx:(Math.random()-0.5)*140,vy:(Math.random()-0.8)*160,life:0.4,t:0,color:'#ffd37a'}); } }
   function spawnBigExplosion(x,y){ for(let i=0;i<80;i++){ effects.push({x,y,vx:(Math.random()-0.5)*240,vy:(Math.random()-0.5)*240,life:0.9,t:0,color: i%2? '#ff9a3c':'#ffd37a'}); } }
 
-  // Kick off
-  requestAnimationFrame(frame);
+  // Background helpers
+  function drawBackground(){
+    const t = performance.now()*0.001;
+    for(const s of stars){
+      s.y += 12*s.z*0.016; if (s.y > WORLD.h) s.y -= WORLD.h;
+      const tw = 0.25 + 0.35*Math.sin(t*3 + s.p);
+      ctx.globalAlpha = 0.35*s.z + tw*0.3;
+      ctx.fillStyle = '#9db9ff';
+      ctx.fillRect(s.x, s.y, 1.2*s.z, 1.2*s.z);
+    }
+    ctx.globalAlpha = 1;
+    for(const p of planets){
+      p.y += p.vy*0.016; if(p.y > WORLD.h + 40){ p.y = -40; }
+      const g = ctx.createRadialGradient(p.x-6,p.y-6,4, p.x,p.y,p.r+10);
+      g.addColorStop(0, 'rgba(255,255,255,.2)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,p.r+10,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      if(p.ring){ ctx.strokeStyle='rgba(255,230,180,.7)'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(p.x,p.y+1,p.r+6,p.r/2,0,0,Math.PI*2); ctx.stroke(); }
+    }
+  }
+
+  function drawRustWall(){
+    ctx.strokeStyle = 'rgba(255,180,80,.25)'; ctx.lineWidth = 10;
+    ctx.strokeRect(FIELD.x-3, FIELD.y-3, FIELD.w+6, FIELD.h+6);
+    const g = ctx.createLinearGradient(0,FIELD.y,0,FIELD.y+FIELD.h);
+    g.addColorStop(0,'#ffb23c'); g.addColorStop(1,'#cc7a17');
+    ctx.strokeStyle = g; ctx.lineWidth = 6.5; ctx.strokeRect(FIELD.x, FIELD.y, FIELD.w, FIELD.h);
+    ctx.fillStyle='rgba(255,255,255,.2)';
+    for(let x=FIELD.x+10; x<FIELD.x+FIELD.w-10; x+=26){ ctx.fillRect(x, FIELD.y-2, 2,2); ctx.fillRect(x, FIELD.y+FIELD.h, 2,2); }
+    for(let y=FIELD.y+10; y<FIELD.y+FIELD.h-10; y+=26){ ctx.fillRect(FIELD.x-2,y,2,2); ctx.fillRect(FIELD.x+FIELD.w,y,2,2); }
+  }
 })();
 </script>
 </body>
