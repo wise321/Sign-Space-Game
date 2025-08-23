@@ -20,13 +20,11 @@
     -webkit-user-select:none;user-select:none;
     padding-bottom:var(--safe-bottom);
   }
-  /* Fit visible viewport on mobile */
   canvas{
     display:block;width:100vw;
     height:100svh; height:100dvh; height:100vh;
     background:linear-gradient(180deg,#0b1324,#070e1c);
   }
-  /* Top UI */
   #topUI{position:fixed;top:4px;left:50%;transform:translateX(-50%);
     display:flex;gap:8px;align-items:center;z-index:4;pointer-events:none}
   .bar{width:clamp(160px,70vw,240px);height:12px;border-radius:9px;padding:2px;background:rgba(255,255,255,.06);
@@ -36,7 +34,6 @@
   .pill{min-width:58px;text-align:center;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px;
     background:rgba(255,255,255,.08);box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
 
-  /* Game Over overlay */
   #gameOver{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.75);z-index:10;color:#eaf4ff}
   .overCard{
     width:min(560px,92vw);
@@ -102,9 +99,8 @@
   const restartBtn = document.getElementById('restartBtn');
   const menuBtn = document.getElementById('menuBtn');
 
-  // Playfield
+  // Playfield inside wall (safe bottom inset for mobile)
   const FIELD = { x: 10, y: 40, w: WORLD.w-20, h: WORLD.h-50 };
-
   function safeBottomCss(){
     const root = getComputedStyle(document.documentElement);
     const v = root.getPropertyValue('--safe-bottom').trim();
@@ -114,9 +110,8 @@
   function layoutFieldGameplay(){
     const r = topUI.getBoundingClientRect();
     const worldPerCss = WORLD.h / (canvas.height/scale);
-    const tinyGapCss = 1;
     const bottomInsetWorld = (safeBottomCss()+4) * worldPerCss;
-    FIELD.y = Math.max(0, Math.round((r.height + tinyGapCss) * worldPerCss));
+    FIELD.y = Math.max(0, Math.round((r.height + 1) * worldPerCss));
     FIELD.x = 10; FIELD.w = WORLD.w - 20; FIELD.h = WORLD.h - FIELD.y - 10 - bottomInsetWorld;
   }
   function layoutFieldMenu(){
@@ -126,7 +121,7 @@
   }
   layoutFieldGameplay();
 
-  // Player image
+  // Player image with black key-out
   let playerImg = null, playerImgProcessed = null;
   (async function preloadPlayer(){
     const tryLoad = (src) => new Promise(res=>{
@@ -150,7 +145,7 @@
   }
 
   // Game state
-  let gameState = 'menu'; // 'menu' | 'playing'
+  let gameState = 'menu';
   let running=true, lastTime=0, advancePending=null;
 
   const keys = new Set();
@@ -170,7 +165,7 @@
     score:0, level:1, collected:0
   };
 
-  // Level duration reduced to 19s
+  // Level time reduced to 19 seconds
   const LEVEL_TIME = 19;
   let levelTime=0;
 
@@ -235,7 +230,6 @@
 
   function enterLevel(lv, initial=false){
     player.level = lv;
-
     if(isPreBoss(lv)){ if(player.shieldCharges<1) player.shieldCharges = 5; }
     else if(!isBossLevel(lv) || initial){ player.shieldCharges = 0; }
 
@@ -259,6 +253,9 @@
 
   // 13% slower enemies at L>=11 (non-boss)
   function enemySpeedMultiplier(L){ return (L>=11) ? 0.87 : 1.0; }
+
+  // Cap total simultaneous enemies for breathing room
+  function maxEnemies(){ return (player.level>=11 ? 10 : 16); }
 
   // Weighted selection helper
   function weightedChoice(weights){
@@ -295,14 +292,15 @@
     const onBoss = isBossLevel(player.level);
     const x = FIELD.x + 18 + Math.random()*(FIELD.w-36);
 
-    // Base roll
-    const chance = onBoss ? 0.68 : 0.6;
+    // Base chance; +5% extra chance on level >= 11 (both boss and non-boss)
+    const base = onBoss ? 0.68 : 0.60;
+    const chance = Math.min(0.9, base + (player.level>=11 ? 0.05 : 0));
     if(Math.random() <= chance){
       let type = choosePowerType(onBoss, player.level);
       if(onBoss && Math.random()<0.02) type = 'missile';
       pushPower(type, x);
     }
-    // Extra rolls (as before)
+    // Extra rolls (kept)
     if(onBoss){
       if(Math.random() < 0.08){ pushPower(Math.random()<0.5?'shield':'health', x); }
     }else if(player.level>=11){
@@ -310,37 +308,33 @@
     }
   }
 
-  // Bosses (HP +10% remained earlier)
+  // Bosses (HP +10% retained)
   function makeBoss(index){
     const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
     const hp = Math.round(baseDps * 60 * minutes * 1.5 * 1.10);
     const bx = FIELD.x + FIELD.w/2, by = FIELD.y + 74;
     const name = ['Centurion Core','Spiral Lancer','Inferno Barrager','Overlord Nexus'][index-1];
-    return { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0,spin:0,sweep:0, low25:false };
+    return { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0,spin:0,sweep:0,low25:false };
   }
   function bossPhaseFromPct(p){ return p<=0.25?4 : p<=0.5?3 : p<=0.75?2 : 1; }
-
-  // Fierceness scaling (ensures bosses 2+ shoot faster than boss 1)
   function bossFierceFactor(b){
-    const idxBoost = 1 + 0.18*(b.index-1); // +18% per boss tier
+    const idxBoost = 1 + 0.18*(b.index-1);
     const phaseBoost = 1 + 0.06*(b.phase-1);
     return idxBoost * phaseBoost;
   }
   function bossFireInterval(b){
-    // Base by phase
+    // Faster base; higher bosses are faster; clamp so bosses 2+ never fire too slowly
     const base = (b.phase===1?0.45 : b.phase===2?0.30 : b.phase===3?0.20 : 0.14);
-    // Faster with higher boss index
     let interval = base * Math.pow(0.86, (b.index-1));
-    // Do not allow slow, boring fire for bosses 2+
     if(b.index>1){
-      const maxByPhase = [0,0.45,0.30,0.20,0.14]; // clamp upper bound (slower than this not allowed)
+      const maxByPhase = [0,0.45,0.30,0.20,0.14];
       interval = Math.min(interval, maxByPhase[b.phase]);
     }
     return Math.max(0.06, interval);
   }
 
-  // Background
+  // Background data
   const stars = Array.from({length:120}, ()=>({x:Math.random()*WORLD.w,y:Math.random()*WORLD.h,z:0.3+Math.random()*0.9,p:Math.random()*6}));
   const planets = [
     {x:70, y:140, r:18, col:'#ff9a2a', ring:true, vy:4, seed:1},
@@ -412,10 +406,12 @@
     if(!isBossLevel(player.level)){
       const L = player.level;
       let rate = Math.max(0.06, 0.75 - L*0.05);
-      if(L>=11) rate *= 1.13; // 13% fewer spawns on 11+
+      if(L>=11) rate *= 1.35; // much fewer spawns on 11+
       if(spawnTimer<=0){
-        const batch = 1 + (L>=4?1:0) + (L>=10?1:0);
-        for(let i=0;i<batch;i++) spawnEnemy();
+        let batch = 1 + (L>=4?1:0) + (L>=10?1:0);
+        if(L>=11) batch = Math.max(1, batch-1); // reduce batch size
+        // spawn only up to cap
+        for(let i=0;i<batch && enemies.length<maxEnemies(); i++) spawnEnemy();
         spawnTimer = rate;
       }
     }
@@ -433,17 +429,15 @@
     if(boss){
       boss.t += dt; boss.patternAngle += dt; boss.rot += dt*0.6; boss.spin += dt*1.3; boss.sweep += dt*0.7;
       const hpPct = boss.hp/boss.hpMax;
-      const prevPhase = boss.phase;
       boss.phase = bossPhaseFromPct(hpPct);
 
-      // Movement per boss
+      // Movement variance
       const amp = [90, 124, 118, 132][boss.index-1] || 100;
       const speed = [0.6, 0.58, 0.75, 0.55][boss.index-1] || 0.6;
       boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*speed)*Math.min(amp, FIELD.w*0.36);
 
-      // Stage 25% FX trigger
+      // 25% HP smoke/fire cue
       if(boss.phase===4){
-        // continuous smoke/fire
         if(Math.random()<0.6) spawnSmoke(boss.x + (Math.random()-0.5)*80, boss.y + 24 + (Math.random()-0.5)*30);
         if(Math.random()<0.2) spawnSpark(boss.x + (Math.random()-0.5)*90, boss.y + (Math.random()-0.5)*40);
       }
@@ -473,10 +467,7 @@
           const dmg = b.isMissile?75 : (b.dmgBoss||10);
           boss.hp -= dmg;
           if(b.isMissile) explodeAt(b.x,b.y);
-          if(boss.hp<=0){
-            bossDeathExplosion(boss.x,boss.y);
-            scheduleNextLevel();
-          }
+          if(boss.hp<=0){ bossDeathExplosion(boss.x,boss.y); scheduleNextLevel(); }
           bullets.splice(i,1);
         }
       }
@@ -556,7 +547,6 @@
 
   // START MENU (inside wall)
   function drawStartMenu(){
-    // Title with stronger sweep (kept)
     const title = 'Sign Space Adventure';
     const centerX = FIELD.x + FIELD.w/2;
     const margin = 12;
@@ -580,7 +570,7 @@
     ctx.fillText(title, centerX, ty);
     ctx.strokeText(title, centerX, ty);
 
-    // Stronger sweeping light strip
+    // Stronger sweep band
     const t = performance.now()*0.001;
     const p = (t%7)/7;
     const textW = ctx.measureText(title).width;
@@ -646,7 +636,7 @@
       ly += 40;
     }
 
-    // Player sprite (menu preview) sized to avoid Start overlap
+    // Player sprite (menu) sized to avoid Start overlap
     const sprite = playerImgProcessed || playerImg;
     let spriteBlockBottom = ly + 6;
     const startBottomY = FIELD.y + FIELD.h - 66;
@@ -662,7 +652,7 @@
       }
     }
 
-    // Start button
+    // Start button + glow
     const bw = 200, bh = 48;
     const bx = FIELD.x + FIELD.w/2 - bw/2;
     const by = Math.min(startBottomY, spriteBlockBottom);
@@ -680,11 +670,10 @@
     ctx.fillText('Start', FIELD.x + FIELD.w/2, by+10);
     ctx.restore();
 
-    // Stronger rotating orange light strip around Start
     drawRotatingGlowAroundRect(bx-12, by-12, bw+24, bh+24, 18, '#ff9a2a');
   }
 
-  // Stronger rotating glow ring
+  // Rotating glow ring
   function drawRotatingGlowAroundRect(x,y,w,h,r,color='#ff9a2a'){
     const t = performance.now()*0.001;
     const P = 2*(w+h) - 8*r + 2*Math.PI*r;
@@ -769,7 +758,7 @@
   }
   function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
 
-  // Watermark — revert to original fonts (kept 10% size boost and brighter band)
+  // Watermark — original fonts, lowered credit to avoid the 'g' tail
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
@@ -783,14 +772,14 @@
     ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
 
-    // Original italic Trebuchet for "Sign"
-    ctx.font='italic 77px "Trebuchet MS", Arial, sans-serif'; // +10% size kept
     const word = 'Sign';
+    ctx.font='italic 77px "Trebuchet MS", Arial, sans-serif';
     ctx.fillStyle='rgba(255,154,42,0.10)'; ctx.fillText(word, cx, cy);
     ctx.fillStyle=g; ctx.fillText(word, cx, cy);
 
-    // Original system font for credit (kept enlarged)
-    const creditY = cy + 38;
+    const m = ctx.measureText(word);
+    const descent = (m.actualBoundingBoxDescent || 20);
+    const creditY = cy + descent + 28; // lowered extra to clear the 'g' tail
     ctx.font='bold 10px system-ui';
     ctx.fillStyle='rgba(255,154,42,0.10)'; ctx.fillText('Created by Agrigorn', cx, creditY);
     ctx.fillStyle=g; ctx.fillText('Created by Agrigorn', cx, creditY);
@@ -808,7 +797,7 @@
     for(let y=FIELD.y+10; y<FIELD.y+FIELD.h-10; y+=26){ ctx.fillRect(FIELD.x-2,y,2,2); ctx.fillRect(FIELD.x+FIELD.w,y,2,2); }
   }
 
-  // Upper-right HUD — bigger indicators (kept)
+  // Upper-right HUD
   function drawHUDInside(){
     const pad = 6;
     let hx = FIELD.x + FIELD.w - pad - 8, hy = FIELD.y + pad + 1;
@@ -823,7 +812,6 @@
     ctx.fillStyle='#cfe5ff'; ctx.font='12px system-ui';
     ctx.fillText(`Collected Sign: ${player.collected}`, FIELD.x+FIELD.w-pad, hy+30);
 
-    // Active tags (top-left)
     let bx = FIELD.x + pad, by = FIELD.y + pad + 1;
     const act = [];
     if(player.spread>0) act.push('Sp');
@@ -860,19 +848,16 @@
       ctx.beginPath(); ctx.moveTo(22,0); ctx.lineTo(-16,-12); ctx.lineTo(-8,0); ctx.lineTo(-16,12); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
     }
-    // Side pods
     if(player.side>0){
       ctx.fillStyle='#ffd96a'; ctx.strokeStyle='#6a540e'; ctx.lineWidth=1.2;
       ctx.beginPath(); ctx.roundRect(px-22,py-7,6,14,3); ctx.fill(); ctx.stroke();
       ctx.beginPath(); ctx.roundRect(px+16,py-7,6,14,3); ctx.fill(); ctx.stroke();
     }
-    // Missile racks
     if(player.missileTimer>0){
       ctx.fillStyle='#c7cbd3'; ctx.strokeStyle='#424a58'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.roundRect(px-6,py+10,4,10,1.5); ctx.fill(); ctx.stroke();
       ctx.beginPath(); ctx.roundRect(px+2,py+10,4,10,1.5); ctx.fill(); ctx.stroke();
     }
-    // Shield ring
     if(player.shieldCharges>0){
       const pulse = 1 + Math.sin(performance.now()*0.006)*0.06;
       const r = 24 * pulse;
@@ -890,7 +875,8 @@
       if(friendly){
         if(b.isMissile){
           ctx.fillStyle = '#d9e1ff'; ctx.fillRect(b.x-1.5, b.y-6, 3, 12);
-          ctx.fillStyle = '#7c8bb3'; ctx.fillRect(b.x-4, b.y+2, 3, 5); ctx.fillRect(b.x+1, b.y+2, 3, 5);
+          ctx.fillStyle = '#7c8bb3'; ctx.fillRect(b.x-4, b.y+2, 3, 5);
+          ctx.fillRect(b.x+1, b.y+2, 3, 5);
           ctx.fillStyle = 'rgba(255,170,60,.85)'; ctx.fillRect(b.x-1, b.y+6, 2, 3);
         }else{
           ctx.strokeStyle = '#fffbd1'; ctx.lineWidth = 2;
@@ -902,7 +888,7 @@
     }
   }
 
-  // Enemy visuals (brighter lights retained)
+  // Enemies (brighter lights retained)
   function hullTeal(){ return '#2e6f75'; }
   function lineDark(){ return '#0f2830'; }
   function canopy(){ return '#ffb23c'; }
@@ -915,7 +901,9 @@
     const t = performance.now()*0.003;
     const len = long + Math.sin(t*9+y)*2;
     const g = ctx.createRadialGradient(x,y+2,1, x,y+len, len);
-    g.addColorStop(0,'rgba(255,240,180,.95)'); g.addColorStop(0.5,'rgba(255,160,40,.85)'); g.addColorStop(1,'rgba(255,90,10,0)');
+    g.addColorStop(0,'rgba(255,240,180,.95)');
+    g.addColorStop(0.5,'rgba(255,160,40,.85)');
+    g.addColorStop(1,'rgba(255,90,10,0)');
     ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(x, y+len*0.6, wide*0.55, len, 0, 0, Math.PI*2); ctx.fill();
   }
 
@@ -1000,7 +988,7 @@
     ctx.restore();
   }
 
-  // BOSS visuals — bigger/extra wings for higher bosses
+  // BOSS visuals — larger higher-tier silhouettes with extra wings
   function bossHull(){ return '#1e5257'; }
   function bossHull2(){ return '#2f7a80'; }
   function bossTrim(){ return '#0f2b2f'; }
@@ -1031,7 +1019,6 @@
     ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim(); ctx.lineWidth=2.5;
     roundRect(ctx,-w/2,-h/2,w,h,18); ctx.fill(); ctx.stroke();
 
-    // Main orange wing panels
     ctx.fillStyle=bossPanel();
     ctx.beginPath();
     ctx.moveTo(-w/2+10, -h/2+14); ctx.lineTo(-w/2+10, h/2-10);
@@ -1040,11 +1027,10 @@
     ctx.moveTo(w/2-10, -h/2+14); ctx.lineTo(w/2-10, h/2-10);
     ctx.quadraticCurveTo(w/2-20-wingSweep, 0, w/2-10, -h/2+14); ctx.fill();
 
-    // Secondary hull stripe
     ctx.fillStyle=bossHull2();
     roundRect(ctx,-w/2+18,-h/2+10,w-36,h-20,12); ctx.fill();
 
-    // Extra side wings (bigger silhouette for higher bosses)
+    // extra small side wings
     if(auxWings>0){
       ctx.fillStyle=bossHull();
       for(const side of [-1,1]){
@@ -1059,12 +1045,10 @@
       }
     }
 
-    // Canopy
     ctx.save(); ctx.shadowColor='#15b1c9'; ctx.shadowBlur=16;
     ctx.fillStyle='rgba(21,177,201,0.75)'; ctx.beginPath(); ctx.ellipse(0,-h*0.18, w*0.18, h*0.26, 0, 0, Math.PI*2); ctx.fill();
     ctx.restore();
 
-    // Towers
     if(towers){
       ctx.fillStyle=bossHull2(); ctx.strokeStyle=bossTrim();
       for(const side of [-1,1]){
@@ -1072,8 +1056,6 @@
         ctx.save(); ctx.shadowColor='#ffb23c'; ctx.shadowBlur=10; ctx.fillStyle='#ffb23c'; ctx.fillRect(side*(w/2-20)-3, -h/2+26, 6, 4); ctx.restore();
       }
     }
-
-    // Small fins
     if(fins){
       ctx.fillStyle=bossHull();
       for(const side of [-1,1]){
@@ -1085,7 +1067,6 @@
       }
     }
 
-    // Core rings + iris
     for(let i=coreRings;i>=1;i--){
       const r = 10 + i*8;
       ctx.strokeStyle = i%2? '#51d5ef' : '#2a97a9';
@@ -1097,7 +1078,6 @@
     ctx.fillStyle='rgba(255,154,42,0.7)'; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,14,0.3,1.2); ctx.closePath(); ctx.fill();
     ctx.restore();
 
-    // Thrusters
     for(let i=0;i<thrusters;i++){
       const tx = -((thrusters-1)/2)*22 + i*22;
       drawEngineFlame(tx, h/2-10, 6, 16);
@@ -1105,7 +1085,7 @@
     ctx.restore();
   }
 
-  // Boss patterns (fierceness factor applied)
+  // Boss patterns (enforced multi-shot on bosses 2+ at 75%+)
   function addEBullet(x,y,vx,vy){ eBullets.push({x,y,vx,vy}); }
   function aimVelocity(x1,y1,x2,y2,speed){
     const dx=x2-x1, dy=y2-y1; const m=Math.hypot(dx,dy)||1;
@@ -1140,15 +1120,17 @@
   }
   function shootSpiralLancer(b){
     const F = bossFierce(b);
+    // Enforce at least 2 arms from Phase 2 onward (prevents single-shot issue)
     let arms = b.phase>=3? 3 : b.phase>=2? 2 : 1;
-    arms = Math.min(5, Math.round(arms * (1 + 0.25*(b.index-1))));
+    arms = Math.max(b.phase>=2?2:1, Math.min(5, Math.round(arms * (1 + 0.25*(b.index-1)))));
     for(let k=0;k<arms;k++){
       const a = b.patternAngle*4.6 + k*(Math.PI*2/arms);
       const spd = (180 + b.phase*24) * F;
       addEBullet(b.x+Math.cos(a)*22, b.y+18+Math.sin(a)*6, Math.cos(a)*spd, Math.sin(a)*spd+80*F);
     }
+    // Side sprays always present from Phase 2+
     if(b.phase>=2){
-      const n = 3 + (b.index>2?2:1);
+      const n = Math.max(3, 3 + (b.index>2?2:1));
       for(const side of [-1,1]){
         for(let i=0;i<n;i++){
           const a = (side*0.6) + (i-(n-1)/2)*0.09 + Math.sin(b.sweep)*0.06;
@@ -1165,7 +1147,7 @@
       addEBullet(x, b.y+30, 0, 250*F);
     }
     const fan = b.phase>=2? (b.phase===2? 6 : 9) : 0;
-    const fanN = fan ? Math.round(fan * (1 + 0.12*(b.index-1))) : 0;
+    const fanN = Math.max(4, fan ? Math.round(fan * (1 + 0.12*(b.index-1))) : 0);
     if(fanN){
       const a0 = -0.7 + Math.sin(b.sweep)*0.45;
       for(let i=0;i<fanN;i++){
@@ -1178,7 +1160,7 @@
   function shootOverlordNexus(b){
     const F = bossFierce(b);
     const crossBase = b.phase>=2? 6 : 4;
-    const cross = Math.round(crossBase * (1 + 0.18*(b.index-1)));
+    const cross = Math.max(5, Math.round(crossBase * (1 + 0.18*(b.index-1))));
     const a0 = b.patternAngle*3.2;
     for(let i=0;i<cross;i++){
       const a = a0 + i*(Math.PI/cross)*2;
@@ -1204,10 +1186,8 @@
     effects.push({smoke:true, x, y, vx:(Math.random()-0.5)*30, vy:-40 - Math.random()*60, life:0.9+Math.random()*0.6, t:0, r:6+Math.random()*8});
   }
   function drawSmoke(f){
-    const t = f.t/f.life;
-    const r = f.r + t*14;
+    const t = f.t/f.life; const r = f.r + t*14;
     const g = ctx.createRadialGradient(f.x,f.y,0, f.x,f.y,r);
-    // fiery core fading to gray smoke
     g.addColorStop(0, `rgba(255,150,60,${1-t})`);
     g.addColorStop(0.5, `rgba(180,90,40,${0.8*(1-t)})`);
     g.addColorStop(1, `rgba(90,90,90,${0.6*(1-t)})`);
@@ -1217,12 +1197,10 @@
     effects.push({spark:true, x, y, vx:(Math.random()-0.5)*160, vy:(Math.random()-1)*160, life:0.4, t:0});
   }
   function drawSpark(f){
-    ctx.strokeStyle='rgba(255,190,90,0.9)';
-    ctx.lineWidth=1.5;
+    ctx.strokeStyle='rgba(255,190,90,0.9)'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx*0.03, f.y - f.vy*0.03); ctx.stroke();
   }
   function bossDeathExplosion(x,y){
-    // Big center + extra pops
     spawnBigExplosion(x,y);
     for(let i=0;i<8;i++){
       const a = Math.random()*Math.PI*2;
@@ -1253,8 +1231,11 @@
     effects.push({x:player.x, y:player.y-24, life:0.8, t:0, label:type});
   }
 
-  // Powerups/signs/effects rendering
-  function drawPowerup(p){ ctx.save(); ctx.translate(p.x,p.y); drawPowerupIconCore(ctx, p.type); ctx.restore(); }
+  function drawPowerup(p){
+    ctx.save(); ctx.translate(p.x,p.y);
+    drawPowerupIconCore(ctx, p.type);
+    ctx.restore();
+  }
   function drawPowerupIconCore(c, type){
     c.save();
     switch(type){
