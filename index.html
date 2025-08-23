@@ -99,7 +99,7 @@
   const restartBtn = document.getElementById('restartBtn');
   const menuBtn = document.getElementById('menuBtn');
 
-  // Playfield inside wall (safe bottom inset for mobile)
+  // Playfield inside wall (safe bottom inset)
   const FIELD = { x: 10, y: 40, w: WORLD.w-20, h: WORLD.h-50 };
   function safeBottomCss(){
     const root = getComputedStyle(document.documentElement);
@@ -165,9 +165,8 @@
     score:0, level:1, collected:0
   };
 
-  // Level time reduced to 19 seconds
-  const LEVEL_TIME = 19;
-  let levelTime=0;
+  // Level duration: dynamic (<=10: 19s, >=11: 15s on non-boss)
+  let levelTime=0, levelTimeTarget=19;
 
   // Input
   window.addEventListener('keydown', e=>{
@@ -230,13 +229,17 @@
 
   function enterLevel(lv, initial=false){
     player.level = lv;
+    levelTxt.textContent = lv;
+    levelTime = 0;
+    levelTimeTarget = (!isBossLevel(lv) ? (lv>=11 ? 15 : 19) : 0);
+
     if(isPreBoss(lv)){ if(player.shieldCharges<1) player.shieldCharges = 5; }
     else if(!isBossLevel(lv) || initial){ player.shieldCharges = 0; }
 
     player.lives = 3;
 
     bullets.length=0; enemies.length=0; eBullets.length=0; powerups.length=0; signs.length=0;
-    levelTime=0; timeFill.style.width='0%'; levelTxt.textContent = lv;
+    timeFill.style.width='0%';
 
     spawnTimer = 0; signTimer = 0; powerTimer = 0;
 
@@ -251,10 +254,10 @@
   // Spawning
   let spawnTimer=0, signTimer=0, powerTimer=0;
 
-  // 13% slower enemies at L>=11 (non-boss)
-  function enemySpeedMultiplier(L){ return (L>=11) ? 0.87 : 1.0; }
+  // 9% slower enemies at L>=11 (non-boss)
+  function enemySpeedMultiplier(L){ return (L>=11) ? 0.91 : 1.0; }
 
-  // Cap total simultaneous enemies for breathing room
+  // Cap total simultaneous enemies (breathing room)
   function maxEnemies(){ return (player.level>=11 ? 10 : 16); }
 
   // Weighted selection helper
@@ -292,15 +295,18 @@
     const onBoss = isBossLevel(player.level);
     const x = FIELD.x + 18 + Math.random()*(FIELD.w-36);
 
-    // Base chance; +5% extra chance on level >= 11 (both boss and non-boss)
+    // Base power chance (+5% at 11+ on both boss/non-boss)
     const base = onBoss ? 0.68 : 0.60;
-    const chance = Math.min(0.9, base + (player.level>=11 ? 0.05 : 0));
+    const chance = Math.min(0.95, base + (player.level>=11 ? 0.05 : 0));
     if(Math.random() <= chance){
       let type = choosePowerType(onBoss, player.level);
-      if(onBoss && Math.random()<0.02) type = 'missile';
+      // Missile chance +7% absolute on boss stages
+      if(onBoss && Math.random() < 0.09) type = 'missile';
       pushPower(type, x);
     }
-    // Extra rolls (kept)
+    // Extra shield rate +10% on 11+ (both boss and non-boss)
+    if(player.level>=11 && Math.random()<0.10){ pushPower('shield', x); }
+    // Existing extra rolls kept
     if(onBoss){
       if(Math.random() < 0.08){ pushPower(Math.random()<0.5?'shield':'health', x); }
     }else if(player.level>=11){
@@ -308,7 +314,7 @@
     }
   }
 
-  // Bosses (HP +10% retained)
+  // Bosses
   function makeBoss(index){
     const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
@@ -324,14 +330,14 @@
     return idxBoost * phaseBoost;
   }
   function bossFireInterval(b){
-    // Faster base; higher bosses are faster; clamp so bosses 2+ never fire too slowly
-    const base = (b.phase===1?0.45 : b.phase===2?0.30 : b.phase===3?0.20 : 0.14);
+    // Faster base; higher bosses are faster; clamp so bosses 2+ never slow to boring rates
+    const base = (b.phase===1?0.40 : b.phase===2?0.28 : b.phase===3?0.19 : 0.13);
     let interval = base * Math.pow(0.86, (b.index-1));
     if(b.index>1){
-      const maxByPhase = [0,0.45,0.30,0.20,0.14];
+      const maxByPhase = [0,0.40,0.28,0.19,0.13];
       interval = Math.min(interval, maxByPhase[b.phase]);
     }
-    return Math.max(0.06, interval);
+    return Math.max(0.055, interval);
   }
 
   // Background data
@@ -375,9 +381,9 @@
     if(!running){ ctx.restore(); requestAnimationFrame(frame); return; }
 
     if(!isBossLevel(player.level)){
-      levelTime += dt; const pct = Math.min(1, levelTime/LEVEL_TIME);
+      levelTime += dt; const pct = Math.min(1, levelTime/levelTimeTarget);
       timeFill.style.width = (pct*100).toFixed(1)+'%';
-      if(levelTime>=LEVEL_TIME){ scheduleNextLevel(); }
+      if(levelTime>=levelTimeTarget){ scheduleNextLevel(); }
     }
 
     ['spread','rapid','side','invuln','missileTimer'].forEach(k=>{ if(player[k]>0) player[k]-=dt; });
@@ -406,11 +412,10 @@
     if(!isBossLevel(player.level)){
       const L = player.level;
       let rate = Math.max(0.06, 0.75 - L*0.05);
-      if(L>=11) rate *= 1.35; // much fewer spawns on 11+
+      if(L>=11) rate *= 1.35; // fewer spawns 11+
       if(spawnTimer<=0){
         let batch = 1 + (L>=4?1:0) + (L>=10?1:0);
-        if(L>=11) batch = Math.max(1, batch-1); // reduce batch size
-        // spawn only up to cap
+        if(L>=11) batch = Math.max(1, batch-1);
         for(let i=0;i<batch && enemies.length<maxEnemies(); i++) spawnEnemy();
         spawnTimer = rate;
       }
@@ -431,15 +436,13 @@
       const hpPct = boss.hp/boss.hpMax;
       boss.phase = bossPhaseFromPct(hpPct);
 
-      // Movement variance
       const amp = [90, 124, 118, 132][boss.index-1] || 100;
       const speed = [0.6, 0.58, 0.75, 0.55][boss.index-1] || 0.6;
       boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*speed)*Math.min(amp, FIELD.w*0.36);
 
-      // 25% HP smoke/fire cue
+      // Low HP FX
       if(boss.phase===4){
-        if(Math.random()<0.6) spawnSmoke(boss.x + (Math.random()-0.5)*80, boss.y + 24 + (Math.random()-0.5)*30);
-        if(Math.random()<0.2) spawnSpark(boss.x + (Math.random()-0.5)*90, boss.y + (Math.random()-0.5)*40);
+        spawnDamageFX(boss);
       }
 
       boss.fireCd -= dt;
@@ -494,7 +497,9 @@
 
     // Effects
     for(let i=effects.length-1;i>=0;i--){
-      const f=effects[i]; f.t+=dt; f.x+=(f.vx||0)*dt; f.y+=(f.vy||0)*dt;
+      const f=effects[i]; f.t+=dt;
+      f.x+=(f.vx||0)*dt; f.y+=(f.vy||0)*dt;
+      if(f.spin) f.ang=(f.ang||0)+f.spin*dt;
       if(f.t>f.life) effects.splice(i,1);
     }
 
@@ -529,7 +534,9 @@
       ctx.globalAlpha = alpha;
       if(f.expl){ drawExplosion(f); }
       else if(f.smoke){ drawSmoke(f); }
-      else if(f.spark){ drawSpark(f); }
+      else if(f.flame){ drawFlame(f); }
+      else if(f.ember){ drawEmber(f); }
+      else if(f.shock){ drawShockwave(f); }
       else if(f.label){
         ctx.fillStyle='#bfe6ff'; ctx.font='bold 10px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
         const name = {spread:'Spread',rapid:'Rapid',side:'Side',shield:'Shield',health:'Repair',missile:'Missile'}[f.label]||f.label;
@@ -549,12 +556,11 @@
   function drawStartMenu(){
     const title = 'Sign Space Adventure';
     const centerX = FIELD.x + FIELD.w/2;
-    const margin = 12;
     let size = 46;
     ctx.textAlign='center'; ctx.textBaseline='top';
     while(size>24){
       ctx.font = `900 ${size}px "Trebuchet MS", Arial, system-ui`;
-      if(ctx.measureText(title).width <= (FIELD.w - margin*2)) break;
+      if(ctx.measureText(title).width <= (FIELD.w - 24)) break;
       size--;
     }
     const ty = FIELD.y + 8;
@@ -570,7 +576,7 @@
     ctx.fillText(title, centerX, ty);
     ctx.strokeText(title, centerX, ty);
 
-    // Stronger sweep band
+    // Sweep band
     const t = performance.now()*0.001;
     const p = (t%7)/7;
     const textW = ctx.measureText(title).width;
@@ -585,7 +591,7 @@
     add(1, 'rgba(255,255,255,0.16)');
     ctx.fillStyle = g; ctx.fillText(title, centerX, ty);
 
-    // Description
+    // Description (wrapped)
     const wrap = (text, maxWidth) => {
       const words = text.split(' '), lines=[]; let line='';
       ctx.font='14px system-ui';
@@ -636,7 +642,7 @@
       ly += 40;
     }
 
-    // Player sprite (menu) sized to avoid Start overlap
+    // Player sprite preview sized to avoid Start overlap
     const sprite = playerImgProcessed || playerImg;
     let spriteBlockBottom = ly + 6;
     const startBottomY = FIELD.y + FIELD.h - 66;
@@ -758,7 +764,7 @@
   }
   function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
 
-  // Watermark — original fonts, lowered credit to avoid the 'g' tail
+  // Watermark — original fonts, credit placed close to 'g' tail (no overlap)
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
@@ -779,7 +785,7 @@
 
     const m = ctx.measureText(word);
     const descent = (m.actualBoundingBoxDescent || 20);
-    const creditY = cy + descent + 28; // lowered extra to clear the 'g' tail
+    const creditY = cy + descent + 12; // much closer, but not touching
     ctx.font='bold 10px system-ui';
     ctx.fillStyle='rgba(255,154,42,0.10)'; ctx.fillText('Created by Agrigorn', cx, creditY);
     ctx.fillStyle=g; ctx.fillText('Created by Agrigorn', cx, creditY);
@@ -797,7 +803,7 @@
     for(let y=FIELD.y+10; y<FIELD.y+FIELD.h-10; y+=26){ ctx.fillRect(FIELD.x-2,y,2,2); ctx.fillRect(FIELD.x+FIELD.w,y,2,2); }
   }
 
-  // Upper-right HUD
+  // Upper-right HUD (kept larger)
   function drawHUDInside(){
     const pad = 6;
     let hx = FIELD.x + FIELD.w - pad - 8, hy = FIELD.y + pad + 1;
@@ -1085,7 +1091,7 @@
     ctx.restore();
   }
 
-  // Boss patterns (enforced multi-shot on bosses 2+ at 75%+)
+  // Boss patterns (enforced strong Phase-1 volleys on bosses 2+)
   function addEBullet(x,y,vx,vy){ eBullets.push({x,y,vx,vy}); }
   function aimVelocity(x1,y1,x2,y2,speed){
     const dx=x2-x1, dy=y2-y1; const m=Math.hypot(dx,dy)||1;
@@ -1104,9 +1110,20 @@
   function shootCenturionCore(b){
     const F = bossFierce(b);
     const o = aimVelocity(b.x,b.y, player.x,player.y, 230*F);
+    // aimed triple always
     for(const off of [-80,0,80]){
       addEBullet(b.x+off*0.06, b.y+26, o.vx + off*0.45*F, o.vy+50*F);
     }
+    // phase 1 ring for bosses 2+ (more bullets at full health)
+    if(b.phase===1 && b.index>1){
+      const ring = 10 + 4*(b.index-1);
+      const a0 = b.patternAngle*1.6;
+      for(let i=0;i<ring;i++){
+        const a = a0 + i*(Math.PI*2/ring);
+        addEBullet(b.x+Math.cos(a)*18, b.y+Math.sin(a)*10, Math.cos(a)*160*F, Math.sin(a)*160*F+60*F);
+      }
+    }
+    // higher phases rings scale
     let total = (b.phase>=2?10:0) + (b.phase>=3?6:0) + (b.phase>=4?8:0);
     total = Math.round(total * (1 + 0.08*(b.index-1)));
     if(total>0){
@@ -1120,17 +1137,25 @@
   }
   function shootSpiralLancer(b){
     const F = bossFierce(b);
-    // Enforce at least 2 arms from Phase 2 onward (prevents single-shot issue)
-    let arms = b.phase>=3? 3 : b.phase>=2? 2 : 1;
-    arms = Math.max(b.phase>=2?2:1, Math.min(5, Math.round(arms * (1 + 0.25*(b.index-1)))));
+    // Phase 1 arms boosted for bosses 2+
+    let arms = (b.phase>=3? 3 : b.phase>=2? 2 : (b.index>1? 2 : 1));
+    arms = Math.min(6, Math.round(arms * (1 + 0.25*(b.index-1))));
     for(let k=0;k<arms;k++){
       const a = b.patternAngle*4.6 + k*(Math.PI*2/arms);
       const spd = (180 + b.phase*24) * F;
       addEBullet(b.x+Math.cos(a)*22, b.y+18+Math.sin(a)*6, Math.cos(a)*spd, Math.sin(a)*spd+80*F);
     }
-    // Side sprays always present from Phase 2+
+    if(b.phase>=1 && b.index>1){
+      // extra opening mini-ring in phase 1+
+      const ring = (b.phase===1? 6 : 8);
+      const a0 = b.patternAngle*3.0;
+      for(let i=0;i<ring;i++){
+        const a = a0 + i*(Math.PI*2/ring);
+        addEBullet(b.x, b.y+18, Math.cos(a)*140*F, Math.sin(a)*140*F+60*F);
+      }
+    }
     if(b.phase>=2){
-      const n = Math.max(3, 3 + (b.index>2?2:1));
+      const n = Math.max(4, 3 + (b.index>2?2:1));
       for(const side of [-1,1]){
         for(let i=0;i<n;i++){
           const a = (side*0.6) + (i-(n-1)/2)*0.09 + Math.sin(b.sweep)*0.06;
@@ -1146,12 +1171,13 @@
       const x = b.x - (columns-1)*18/2 + i*18;
       addEBullet(x, b.y+30, 0, 250*F);
     }
-    const fan = b.phase>=2? (b.phase===2? 6 : 9) : 0;
-    const fanN = Math.max(4, fan ? Math.round(fan * (1 + 0.12*(b.index-1))) : 0);
+    // extra opening fan even in phase 1 for bosses 2+
+    const baseFan = (b.phase>=2? (b.phase===2? 6 : 9) : (b.index>1? 5 : 0));
+    const fanN = baseFan ? Math.round(baseFan * (1 + 0.12*(b.index-1))) : 0;
     if(fanN){
-      const a0 = -0.7 + Math.sin(b.sweep)*0.45;
+      const a0 = -0.6 + Math.sin(b.sweep)*0.4;
       for(let i=0;i<fanN;i++){
-        const a = a0 + i*(1.4/(fanN-1));
+        const a = a0 + i*(1.2/(Math.max(1,fanN-1)));
         const spd = (210 + i*7) * F;
         addEBullet(b.x, b.y+22, Math.sin(a)*spd, Math.cos(a)*-40 + 170*F);
       }
@@ -1159,7 +1185,8 @@
   }
   function shootOverlordNexus(b){
     const F = bossFierce(b);
-    const crossBase = b.phase>=2? 6 : 4;
+    // Cross count: boosted at phase 1 for bosses 2+
+    const crossBase = b.phase>=2? 6 : (b.index>1? 6 : 4);
     const cross = Math.max(5, Math.round(crossBase * (1 + 0.18*(b.index-1))));
     const a0 = b.patternAngle*3.2;
     for(let i=0;i<cross;i++){
@@ -1181,28 +1208,73 @@
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
   function rectHitPoint(r, x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
-  // Damage/explosion effects
+  // Cooler damage/explosion effects
+  function spawnDamageFX(b){
+    // Layered flames + smoke + embers near engines and side panels
+    if(Math.random()<0.5) spawnFirePlume(b.x + (Math.random()-0.5)*90, b.y + 18 + (Math.random()-0.5)*30);
+    if(Math.random()<0.35) spawnSmoke(b.x + (Math.random()-0.5)*100, b.y + (Math.random()-0.5)*40);
+    if(Math.random()<0.25) spawnEmber(b.x + (Math.random()-0.5)*110, b.y + (Math.random()-0.5)*40);
+  }
+  function spawnFirePlume(x,y){
+    const n = 2 + Math.floor(Math.random()*3);
+    for(let i=0;i<n;i++){
+      const a = -Math.PI/2 + (Math.random()-0.5)*0.8;
+      const sp = 60 + Math.random()*90;
+      effects.push({flame:true,x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.6+Math.random()*0.5,t:0,ang:Math.random()*Math.PI*2,spin:(Math.random()-0.5)*2,baseR:8+Math.random()*10});
+    }
+  }
+  function drawFlame(f){
+    const t = f.t/f.life;
+    const r = f.baseR * (1 + t*1.4);
+    const cx=f.x, cy=f.y;
+    const g = ctx.createRadialGradient(cx,cy,0, cx,cy,r);
+    g.addColorStop(0, `rgba(255,230,120,${1-t})`);
+    g.addColorStop(0.4, `rgba(255,140,40,${0.9*(1-t)})`);
+    g.addColorStop(1, `rgba(60,20,10,0)`);
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(f.ang||0);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,0, r*0.6, r, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
   function spawnSmoke(x,y){
-    effects.push({smoke:true, x, y, vx:(Math.random()-0.5)*30, vy:-40 - Math.random()*60, life:0.9+Math.random()*0.6, t:0, r:6+Math.random()*8});
+    effects.push({smoke:true, x, y, vx:(Math.random()-0.5)*30, vy:-40 - Math.random()*60, life:0.9+Math.random()*0.6, t:0, r:8+Math.random()*10});
   }
   function drawSmoke(f){
-    const t = f.t/f.life; const r = f.r + t*14;
-    const g = ctx.createRadialGradient(f.x,f.y,0, f.x,f.y,r);
-    g.addColorStop(0, `rgba(255,150,60,${1-t})`);
-    g.addColorStop(0.5, `rgba(180,90,40,${0.8*(1-t)})`);
-    g.addColorStop(1, `rgba(90,90,90,${0.6*(1-t)})`);
-    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(f.x,f.y,r,0,Math.PI*2); ctx.fill();
+    const t = f.t/f.life;
+    const r = f.r * (1 + t*1.8);
+    const cx=f.x, cy=f.y;
+    // cool layered smoke with warm core
+    const g = ctx.createRadialGradient(cx,cy,0, cx,cy,r);
+    g.addColorStop(0, `rgba(255,160,60,${0.8*(1-t)})`);
+    g.addColorStop(0.35, `rgba(120,80,60,${0.7*(1-t)})`);
+    g.addColorStop(1, `rgba(40,40,50,${0.55*(1-t)})`);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
   }
-  function spawnSpark(x,y){
-    effects.push({spark:true, x, y, vx:(Math.random()-0.5)*160, vy:(Math.random()-1)*160, life:0.4, t:0});
+  function spawnEmber(x,y){
+    const a = Math.random()*Math.PI*2;
+    const sp = 120 + Math.random()*120;
+    effects.push({ember:true,x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.6,t:0});
   }
-  function drawSpark(f){
-    ctx.strokeStyle='rgba(255,190,90,0.9)'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx*0.03, f.y - f.vy*0.03); ctx.stroke();
+  function drawEmber(f){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle='rgba(255,180,80,0.9)'; ctx.beginPath(); ctx.arc(f.x,f.y,1.6,0,Math.PI*2); ctx.fill();
+    ctx.globalCompositeOperation='source-over';
+    ctx.restore();
+  }
+  function drawShockwave(f){
+    const t = f.t/f.life;
+    const r = 10 + t*60;
+    ctx.strokeStyle = `rgba(255,200,120,${0.7*(1-t)})`;
+    ctx.lineWidth = 2 + (1-t)*2;
+    ctx.beginPath(); ctx.arc(f.x,f.y,r,0,Math.PI*2); ctx.stroke();
   }
   function bossDeathExplosion(x,y){
     spawnBigExplosion(x,y);
-    for(let i=0;i<8;i++){
+    // add shockwaves
+    effects.push({shock:true,x,y,life:0.6,t:0});
+    setTimeout(()=>effects.push({shock:true,x,y,life:0.7,t:0}), 0);
+    for(let i=0;i<10;i++){
       const a = Math.random()*Math.PI*2;
       explodeAt(x + Math.cos(a)*30, y + Math.sin(a)*20);
     }
