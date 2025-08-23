@@ -234,11 +234,10 @@
     advancePending = (n>20) ? 'gameover' : n;
   }
 
-  // Spawning
+  // Spawning (slightly reduced descent in requested ranges)
   let spawnTimer=0, signTimer=0, powerTimer=0;
   function levelSpeedMod(L){
-    const inRange = (L>=6 && L<=9) || (L>=11 && L<=14) || (L>=16 && L<=19);
-    return inRange ? 0.9 : 1.0; // 10% slower in those ranges
+    return ((L>=6 && L<=9) || (L>=11 && L<=14) || (L>=16 && L<=19)) ? 0.9 : 1.0;
   }
   function spawnEnemy(){
     if(isBossLevel(player.level)) return;
@@ -266,7 +265,7 @@
     powerups.push({type, x, y:FIELD.y+8, vy: 170, t:0});
   }
 
-  // Bosses (HP/timing same; visuals/patterns from your teal motif)
+  // Bosses
   function makeBoss(index){
     const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
@@ -439,7 +438,7 @@
 
   function drawFrame(){
     drawBackground(false);
-    drawWatermark();
+    drawWatermark(); // updated blue palette + credit placement
     drawRustWall();
 
     ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
@@ -473,7 +472,7 @@
 
   // START MENU (inside wall)
   function drawStartMenu(){
-    // Metallic, shiny title with sweeping light strip
+    // Title: Sci-fi metallic blue
     const title = 'Sign Space Adventure';
     const centerX = FIELD.x + FIELD.w/2;
     const margin = 12;
@@ -484,58 +483,56 @@
       if(ctx.measureText(title).width <= (FIELD.w - margin*2)) break;
       size--;
     }
-    const ty = FIELD.y + 8;
+    const ty = FIELD.y + 10;
 
-    // Base metallic gradient (vertical)
-    const metalTitle = ctx.createLinearGradient(0, ty, 0, ty + size*1.2);
-    metalTitle.addColorStop(0.0, '#eef3ff');
-    metalTitle.addColorStop(0.35,'#9aa6b6');
-    metalTitle.addColorStop(0.5, '#ffffff');
-    metalTitle.addColorStop(0.7, '#8a95a6');
-    metalTitle.addColorStop(1.0, '#d7dde8');
+    const metalTitle = ctx.createLinearGradient(FIELD.x, ty, FIELD.x+FIELD.w, ty);
+    metalTitle.addColorStop(0.0,'#b4c8ed');
+    metalTitle.addColorStop(0.35,'#51a1ff');
+    metalTitle.addColorStop(0.7,'#98e7ff');
+    metalTitle.addColorStop(1.0,'#dbe8ff');
 
     ctx.fillStyle = metalTitle;
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.lineWidth = Math.max(1, size*0.045);
+    ctx.strokeStyle = 'rgba(10,20,35,0.35)';
+    ctx.lineWidth = Math.max(1, size*0.05);
     ctx.fillText(title, centerX, ty);
     ctx.strokeText(title, centerX, ty);
 
-    // Sweeping light strip across the title
-    const t = performance.now()*0.001;
-    const p = (t%7)/7;
+    // Title sweep
+    const t = performance.now()*0.001, p = (t%7)/7;
     const textW = ctx.measureText(title).width;
     const x1 = centerX - textW/2, x2 = centerX + textW/2;
-    const sweep = ctx.createLinearGradient(x1, 0, x2, 0);
-    const band = p, spread = 0.06;
+    const sweep = ctx.createLinearGradient(x1,0,x2,0);
+    const band=p, spread=0.06;
     const add = (pos,col)=> sweep.addColorStop(Math.min(1,Math.max(0,pos)), col);
-    add(0, 'rgba(255,255,255,0.10)');
-    add(band-spread, 'rgba(255,255,255,0.10)');
-    add(band, 'rgba(255,255,255,0.60)');
-    add(band+spread, 'rgba(255,255,255,0.10)');
-    add(1, 'rgba(255,255,255,0.10)');
-    ctx.fillStyle = sweep;
-    ctx.fillText(title, centerX, ty);
+    add(0,'rgba(255,255,255,0.08)');
+    add(band-spread,'rgba(255,255,255,0.10)');
+    add(band,'rgba(255,255,255,0.55)');
+    add(band+spread,'rgba(255,255,255,0.10)');
+    add(1,'rgba(255,255,255,0.08)');
+    ctx.fillStyle=sweep; ctx.fillText(title, centerX, ty);
 
-    // Description (wrapped)
-    const wrap = (text, maxWidth) => {
-      const words = text.split(' '), lines=[]; let line='';
-      ctx.font='14px system-ui';
-      for(const w of words){
-        const test = line? line+' '+w : w;
-        if(ctx.measureText(test).width > maxWidth){ if(line) lines.push(line); line=w; }
-        else line=test;
-      }
-      if(line) lines.push(line);
-      return lines;
-    };
-    const desc = 'Guide your ship through waves of enemies and collect Sign points. Use power ups to boost firepower and shields and prepare for bosses.';
-    const descLines = wrap(desc, FIELD.w - 24);
-    let ty2 = ty + size + 6;
-    ctx.fillStyle='#ffe6c9'; ctx.font='14px system-ui';
-    for(const L of descLines){ ctx.fillText(L, centerX, ty2); ty2 += 16; }
+    // Description + Legend backdrop (darker for readability)
+    const blockX = FIELD.x + 12, blockW = FIELD.w - 24;
+    let blockY = ty + size + 10;
+    const blockPad = 14;
+    const rowH = 40;
+    const rows = 6;
+    const descH = 36;
+    const blockH = blockPad*2 + descH + rows*rowH + 10;
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#0b1220ef';
+    roundRect(ctx, blockX, blockY, blockW, blockH, 16); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.stroke();
+    ctx.restore();
 
-    // Legends on the left side with darker background rows for readability
-    const legend = [
+    // Description
+    ctx.fillStyle='#eaf4ff'; ctx.font='bold 14px system-ui'; ctx.textAlign='center';
+    ctx.fillText('Guide your ship through waves of enemies and collect Sign points.', FIELD.x+FIELD.w/2, blockY+blockPad-2);
+    ctx.fillText('Use power ups to boost firepower and shields and prepare for bosses.', FIELD.x+FIELD.w/2, blockY+blockPad+16);
+
+    // Legends (kept inside backdrop, scaled if needed)
+    const legendList = [
       {k:'spread', label:'Spread', d:'Fires 3-way shots.'},
       {k:'rapid',  label:'Rapid',  d:'Halves shot delay.'},
       {k:'side',   label:'Side Pods', d:'Adds two side cannons.'},
@@ -543,92 +540,91 @@
       {k:'health', label:'Repair', d:'+1 life, max 6.'},
       {k:'missile',label:'Missile',d:'Boss-only, heavy damage.'}
     ];
-    let ly = ty2 + 10;
-    const leftX = FIELD.x + 12;
-    ctx.textAlign='left';
-    for(const it of legend){
-      // darkened row background
-      ctx.fillStyle = 'rgba(7,10,16,0.65)';
-      roundRect(ctx, leftX+2, ly+2, Math.min(220, FIELD.w*0.6), 36, 8); ctx.fill();
-      // subtle border
-      ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
-      roundRect(ctx, leftX+2, ly+2, Math.min(220, FIELD.w*0.6), 36, 8); ctx.stroke();
+    let ly = blockY + blockPad + descH;
+    const leftPad = blockX + 14;
+    const textLeft = leftPad + 34; // icon box is 28, + padding
+    for(const it of legendList){
+      // Row subtle bg
+      ctx.fillStyle='rgba(255,255,255,0.04)';
+      roundRect(ctx, leftPad-6, ly+4, Math.min(240, blockW-28), rowH-8, 10); ctx.fill();
 
-      drawPowerupIconAt(leftX+14, ly+20, it.k);
-      ctx.fillStyle='#ffe6c9'; ctx.font='bold 12px system-ui';
-      ctx.fillText(it.label, leftX+14+28, ly+8);
-      ctx.fillStyle='#d9cdb6'; ctx.font='11px system-ui';
-      ctx.fillText(it.d, leftX+14+28, ly+22);
-      ly += 44; // extra gap
+      // Icon inside row, slightly scaled down to ensure no overspill
+      drawPowerupIconAt(leftPad, ly + rowH/2, it.k, 0.9);
+
+      // Labels
+      ctx.textAlign='left';
+      ctx.fillStyle='#dbeeff'; ctx.font='bold 12px system-ui';
+      ctx.fillText(it.label, textLeft, ly + 10);
+      ctx.fillStyle='#b5c2d6'; ctx.font='11px system-ui';
+      ctx.fillText(it.d, textLeft, ly + 24);
+
+      ly += rowH;
     }
 
-    // Big player sprite (bigger, but auto-fitted to avoid overlaps)
+    // Player sprite: maximize size without overlapping Start button
     const sprite = playerImgProcessed || playerImg;
-    let spriteBottom = ly + 8;
+    let spriteBottom = ly + 10;
+    const buttonBottomMargin = 78;
     if(sprite){
       const iw = sprite.width, ih = sprite.height;
-      // compute max height available before bottom UI area
-      const availableH = Math.max(80, (FIELD.y + FIELD.h - 100) - (ly + 8)); // keep 100px bottom margin
-      const target = Math.min( Math.min(availableH, FIELD.w*0.90), 240 ); // larger than before, capped
+      // Space available between current Y and button top (FIELD.h - buttonBottomMargin)
+      const maxBottom = FIELD.y + FIELD.h - buttonBottomMargin - 10;
+      const availableH = Math.max(80, maxBottom - spriteBottom);
+      const maxW = Math.min(FIELD.w*0.95, FIELD.w - 40);
+      const target = Math.min(availableH, maxW);
       const s = target / Math.max(iw, ih);
+      const drawH = ih * s;
       ctx.save();
-      ctx.translate(FIELD.x + FIELD.w/2, ly + 8 + target*0.5);
+      ctx.translate(FIELD.x + FIELD.w/2, spriteBottom + drawH/2);
       ctx.scale(s, s);
       ctx.drawImage(sprite, -iw/2, -ih/2, iw, ih);
       ctx.restore();
-      spriteBottom = ly + 8 + target + 10;
+      spriteBottom = spriteBottom + drawH + 8;
     }
 
-    // Start button — same metallic design as title + rotating light strip around
-    const bw = Math.min(220, FIELD.w - 40), bh = 50;
+    // Start button — metallic blue + continuous sweeping light strip
+    const bw = Math.min(240, FIELD.w - 36), bh = 56;
     const bx = FIELD.x + FIELD.w/2 - bw/2;
     const by = Math.min(FIELD.y + FIELD.h - 70, spriteBottom);
     startBtn.x=bx; startBtn.y=by; startBtn.w=bw; startBtn.h=bh;
 
-    // Metallic fill like title (vertical)
-    const metalBtn = ctx.createLinearGradient(0,by,0,by+bh);
-    metalBtn.addColorStop(0.0, '#eef3ff');
-    metalBtn.addColorStop(0.35,'#9aa6b6');
-    metalBtn.addColorStop(0.5, '#ffffff');
-    metalBtn.addColorStop(0.7, '#8a95a6');
-    metalBtn.addColorStop(1.0, '#d7dde8');
-
-    ctx.fillStyle=metalBtn;
-    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=2;
-    roundRect(ctx, bx,by,bw,bh,14); ctx.fill(); ctx.stroke();
-
-    // Title-like sweep across the button body
-    const sweepBtn = ctx.createLinearGradient(bx,0,bx+bw,0);
-    const bandBtn = (performance.now()*0.001 % 7)/7, spreadBtn=0.07;
-    const addB = (pos,col)=> sweepBtn.addColorStop(Math.min(1,Math.max(0,pos)), col);
-    addB(0,'rgba(255,255,255,0.10)');
-    addB(bandBtn-spreadBtn,'rgba(255,255,255,0.10)');
-    addB(bandBtn,'rgba(255,255,255,0.55)');
-    addB(bandBtn+spreadBtn,'rgba(255,255,255,0.10)');
-    addB(1,'rgba(255,255,255,0.10)');
-    ctx.fillStyle=sweepBtn;
-    roundRect(ctx, bx,by,bw,bh,14); ctx.fill();
-
-    // Rotating light strip around the button (animated dashed glow)
+    // Button body
     ctx.save();
-    ctx.lineWidth=3;
-    ctx.setLineDash([18, 140]);
-    ctx.lineDashOffset = - (performance.now()*0.12); // animate
-    const edgeGrad = ctx.createLinearGradient(bx,by,bx+bw,by+bh);
-    edgeGrad.addColorStop(0,'rgba(255,255,255,0.55)');
-    edgeGrad.addColorStop(1,'rgba(255,255,255,0.20)');
-    ctx.strokeStyle=edgeGrad;
-    ctx.shadowColor='rgba(255,255,255,0.35)'; ctx.shadowBlur=10;
-    roundRect(ctx, bx-3,by-3,bw+6,bh+6,16); ctx.stroke();
+    roundRect(ctx, bx,by,bw,bh,18);
+    ctx.clip();
+    const metalBtn = ctx.createLinearGradient(bx,by,bx+bw,by+bh);
+    metalBtn.addColorStop(0.0,'#bcd8ff');
+    metalBtn.addColorStop(0.35,'#45a9ff');
+    metalBtn.addColorStop(0.7,'#86d1ff');
+    metalBtn.addColorStop(1.0,'#e6f2ff');
+    ctx.fillStyle=metalBtn; ctx.fillRect(bx,by,bw,bh);
+
+    // Continuous light band: a bright arc sweeping the full ellipse
+    const tt = (performance.now()/1200)%1; // cycle
+    const a0 = tt*Math.PI*2, a1 = a0 + Math.PI*0.5; // 90° bright band
+    ctx.strokeStyle='rgba(255,255,255,0.85)';
+    ctx.lineWidth=10;
+    ctx.shadowColor='rgba(255,255,255,0.65)'; ctx.shadowBlur=16;
+    ctx.beginPath(); ctx.ellipse(bx+bw/2, by+bh/2, bw*0.48, bh*0.42, 0, a0, a1); ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // slight inner sheen
+    const sheen = ctx.createLinearGradient(bx,by,bx,by+bh);
+    sheen.addColorStop(0,'rgba(255,255,255,0.20)');
+    sheen.addColorStop(0.5,'rgba(255,255,255,0.05)');
+    sheen.addColorStop(1,'rgba(255,255,255,0.00)');
+    ctx.fillStyle=sheen; ctx.fillRect(bx,by,bw,bh);
     ctx.restore();
 
-    // Button label in metallic text
-    ctx.save();
-    ctx.font='900 24px "Trebuchet MS", system-ui';
+    // Highly readable START label (white fill, dark outline, glow)
+    ctx.font='900 26px "Trebuchet MS", system-ui';
     ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.fillStyle=metalBtn; // same metallic
-    ctx.fillText('Start', FIELD.x + FIELD.w/2, by+12);
-    ctx.restore();
+    ctx.lineWidth=4; ctx.strokeStyle='#0a1b30';
+    ctx.strokeText('START', bx+bw/2, by+12);
+    ctx.shadowColor='rgba(255,255,255,0.6)'; ctx.shadowBlur=12;
+    ctx.fillStyle='#ffffff';
+    ctx.fillText('START', bx+bw/2, by+12);
+    ctx.shadowBlur=0;
   }
 
   // Background and planets (menu: true uses non-overlapping static planets)
@@ -700,27 +696,27 @@
   function hexToRgb(hex){ const h = hex.replace('#',''); const n = parseInt(h,16); return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 }; }
   function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
 
-  // Watermark + credit
+  // Watermark + credit (blue sci-fi palette)
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
     const g = ctx.createLinearGradient(x1, 0, x2, 0);
-    const band = p, spread = 0.04;
     const add = (pos,col)=> g.addColorStop(Math.min(1,Math.max(0,pos)), col);
-    add(0, 'rgba(255,154,42,0.06)'); add(band-spread,'rgba(255,154,42,0.06)');
-    add(band,'rgba(255,214,130,0.18)'); add(band+spread,'rgba(255,154,42,0.06)'); add(1,'rgba(255,154,42,0.06)');
+    const band=p, spread=0.04;
+    add(0,'rgba(144,194,255,0.06)'); add(band-spread,'rgba(144,194,255,0.06)');
+    add(band,'rgba(210,238,255,0.18)'); add(band+spread,'rgba(144,194,255,0.06)'); add(1,'rgba(144,194,255,0.06)');
     const cx = WORLD.w/2, cy = WORLD.h/2;
     ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='italic 64px "Trebuchet MS", Arial, sans-serif';
     const word = 'Sign';
-    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText(word, cx, cy);
+    ctx.fillStyle='rgba(144,194,255,0.08)'; ctx.fillText(word, cx, cy);
     ctx.fillStyle=g; ctx.fillText(word, cx, cy);
     const m = ctx.measureText(word);
     const descent = (m.actualBoundingBoxDescent || 20);
     const creditY = cy + descent + 8;
     ctx.font='bold 9px system-ui';
-    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Created by Agrigorn', cx, creditY);
+    ctx.fillStyle='rgba(144,194,255,0.08)'; ctx.fillText('Created by Agrigorn', cx, creditY);
     ctx.fillStyle=g; ctx.fillText('Created by Agrigorn', cx, creditY);
     ctx.restore();
   }
@@ -829,7 +825,7 @@
     }
   }
 
-  // Enemy visuals (teal + crimson)
+  // Enemy visuals (teal + crimson) with stronger glow
   function hullTeal(){ return '#2e6f75'; }
   function lineDark(){ return '#0f2830'; }
   function canopy(){ return '#ffb23c'; }
@@ -849,6 +845,17 @@
 
   function drawEnemy(e){
     ctx.save(); ctx.translate(e.x,e.y); ctx.rotate(Math.PI);
+
+    // Stronger pulsing glow underlay
+    ctx.save();
+    const pulse = 0.45 + 0.35*Math.sin(performance.now()/160 + e.t*3);
+    ctx.globalAlpha = pulse;
+    const rg = ctx.createRadialGradient(0,0,2, 0,0,22);
+    rg.addColorStop(0,'rgba(150,230,255,0.9)');
+    rg.addColorStop(1,'rgba(150,230,255,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
     const blink = (Math.sin(e.t*6)+1)*0.5;
     switch(e.type){
       case 'crimson1':{
@@ -928,11 +935,22 @@
     ctx.restore();
   }
 
-  // BOSSES — teal motif with rotating side cannons
+  // BOSSES — teal motif with rotating side cannons + stronger glow
   function bossHull(){ return '#2e6f75'; }
   function bossTrim(){ return '#12333a'; }
   function drawBoss(b){
     ctx.save(); ctx.translate(b.x,b.y);
+
+    // Strong pulsing aura
+    ctx.save();
+    const aPulse = 0.6 + 0.25*Math.sin(performance.now()/160 + b.t*2);
+    ctx.globalAlpha = aPulse;
+    const rg = ctx.createRadialGradient(0,10,0, 0,10,84);
+    rg.addColorStop(0,'rgba(90,230,255,0.9)');
+    rg.addColorStop(1,'rgba(90,230,255,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0,10,86,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
     // main body
     ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim(); ctx.lineWidth=2.5;
     const bw = 120, bh = 60;
@@ -948,7 +966,7 @@
     for(const side of [-1,1]){
       ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim();
       ctx.beginPath(); ctx.roundRect(side*(bw/2-18)-10,-6,20,12,4); ctx.fill(); ctx.stroke();
-      ctx.fillStyle=lightGlow(.7);
+      ctx.fillStyle=lightGlow(.8);
       ctx.fillRect(side*(bw/2-6)-2,-3,4,6);
     }
     ctx.restore();
@@ -979,7 +997,7 @@
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
   function rectHitPoint(r, x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
-  // Power-ups (crash-safe)
+  // Power-ups (crash-safe, timers stack with caps)
   function bumpTimer(prop, add, cap){
     player[prop] = Math.min(cap, Math.max(0, (player[prop]||0) + add));
   }
@@ -1047,8 +1065,8 @@
     }
     c.restore();
   }
-  function drawPowerupIconAt(x,y,type){
-    ctx.save(); ctx.translate(x,y);
+  function drawPowerupIconAt(x,y,type, scale=1.0){
+    ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
     ctx.fillStyle='rgba(255,180,80,.12)';
     roundRect(ctx,-14,-14,28,28,6); ctx.fill();
     ctx.translate(-1,0);
