@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <title>Sign — Retro Descent</title>
 <style>
   :root{
@@ -239,9 +239,11 @@
   // Spawning
   let spawnTimer=0, signTimer=0, powerTimer=0;
 
-  // Slight enemy descent reduction on specified level bands
+  // Slight enemy descent reduction bands
   function enemySpeedMultiplier(L){
-    return ((L>=6 && L<=9) || (L>=11 && L<=14) || (L>=16 && L<=19)) ? 0.9 : 1.0;
+    // 10% slower on 11–14 and 16–19
+    if((L>=11 && L<=14) || (L>=16 && L<=19)) return 0.9;
+    return 1.0;
   }
 
   function spawnEnemy(){
@@ -270,14 +272,27 @@
     powerups.push({type, x, y:FIELD.y+8, vy: 170, t:0});
   }
 
-  // Bosses (HP/timing same; visuals/patterns from your script)
+  // Bosses (HP +10%, 4 distinct looks + patterns, phase swaps at 75/50/25%)
   function makeBoss(index){
     const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
-    const hp = Math.round(baseDps * 60 * minutes * 1.5);
+    const hp = Math.round(baseDps * 60 * minutes * 1.5 * 1.10); // +10% health
     const bx = FIELD.x + FIELD.w/2, by = FIELD.y + 74;
-    const name = ['Aegis Mk I','Aegis Mk II','Aegis Mk III','Aegis Overlord'][index-1];
-    return { index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0 };
+    const name = ['Centurion Core','Spiral Lancer','Inferno Barrager','Overlord Nexus'][index-1];
+    return {
+      index,name,x:bx,y:by,hp,hpMax:hp,t:0,phase:1,fireCd:0.4,patternAngle:0,rot:0,
+      spin:0, sweep:0
+    };
+  }
+  function bossPhaseFromPct(p){
+    // Phase 1: >75%, Phase 2: 50–75%, Phase 3: 25–50%, Phase 4: <=25%
+    return p<=0.25?4 : p<=0.5?3 : p<=0.75?2 : 1;
+  }
+  function bossFireInterval(b){
+    // Faster as phases increase; slight per-boss personality tweaks
+    const base = (b.phase===1?0.55 : b.phase===2?0.38 : b.phase===3?0.26 : 0.18);
+    const tweak = [0.00, -0.03, 0.02, -0.04][b.index-1] || 0;
+    return Math.max(0.08, base + tweak);
   }
 
   // Background data
@@ -286,7 +301,6 @@
     {x:70, y:140, r:18, col:'#ff9a2a', ring:true, vy:4, seed:1},
     {x:300, y:280, r:14, col:'#7bc8ff', ring:false, vy:5, seed:2}
   ];
-  // Menu planets (static, non-overlapping)
   const menuPlanets = [
     {x:FIELD.x+80, y:FIELD.y+150, r:22, col:'#ff9a2a', ring:true, seed:11},
     {x:FIELD.x+260, y:FIELD.y+360, r:26, col:'#7bc8ff', ring:false, seed:22}
@@ -306,10 +320,9 @@
     if(gameState==='menu'){
       layoutFieldMenu();
       topUI.style.visibility='hidden';
-      drawBackground(true); // menu = true
+      drawBackground(true);
       drawRustWall();
 
-      // everything inside wall; no watermark in menu
       ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
       drawStartMenu();
       ctx.restore();
@@ -353,7 +366,9 @@
     spawnTimer -= dt; signTimer -= dt; powerTimer -= dt;
     if(!isBossLevel(player.level)){
       const L = player.level;
-      const rate = Math.max(0.06, 0.75 - L*0.05);
+      let rate = Math.max(0.06, 0.75 - L*0.05);
+      // Reduce spawn rate (fewer spawns) by 10% on 11–14 and 16–19
+      if((L>=11 && L<=14) || (L>=16 && L<=19)) rate *= 1.10;
       if(spawnTimer<=0){
         const batch = 1 + (L>=4?1:0) + (L>=10?1:0);
         for(let i=0;i<batch;i++) spawnEnemy();
@@ -372,13 +387,18 @@
 
     // Boss logic
     if(boss){
-      boss.t += dt; boss.patternAngle += dt; boss.rot += dt*0.6;
+      boss.t += dt; boss.patternAngle += dt; boss.rot += dt*0.6; boss.spin += dt*1.3; boss.sweep += dt*0.7;
       const hpPct = boss.hp/boss.hpMax;
-      boss.phase = hpPct<=0.33?3:(hpPct<=0.66?2:1);
-      boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*0.6)*Math.min(110, FIELD.w*0.30);
+      boss.phase = bossPhaseFromPct(hpPct);
+
+      // Movement personality per boss
+      const amp = [90, 108, 84, 112][boss.index-1] || 90;
+      const speed = [0.6, 0.55, 0.75, 0.5][boss.index-1] || 0.6;
+      boss.x = FIELD.x + FIELD.w/2 + Math.sin(boss.t*speed)*Math.min(amp, FIELD.w*0.34);
+
       boss.fireCd -= dt;
-      const fireRate = boss.phase===1?0.5:(boss.phase===2?0.34:0.22);
-      if(boss.fireCd<=0){ boss.fireCd=fireRate; bossShoot(boss); }
+      const fireInterval = bossFireInterval(boss);
+      if(boss.fireCd<=0){ boss.fireCd=fireInterval; bossShoot(boss); }
     }
 
     // Bullets
@@ -445,7 +465,7 @@
 
   function drawFrame(){
     drawBackground(false);
-    drawWatermark(); // includes Created by Agrigorn
+    drawWatermark();
     drawRustWall();
 
     ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
@@ -477,15 +497,14 @@
     ctx.restore();
   }
 
-  // START MENU (inside wall, no watermark)
+  // START MENU (inside wall)
   function drawStartMenu(){
-    // Metallic, shiny title with sweeping light strip
+    // Metallic title
     const title = 'Sign Space Adventure';
     const centerX = FIELD.x + FIELD.w/2;
     const margin = 12;
     let size = 46;
     ctx.textAlign='center'; ctx.textBaseline='top';
-    // Fit title to available width
     while(size>24){
       ctx.font = `900 ${size}px "Trebuchet MS", Arial, system-ui`;
       if(ctx.measureText(title).width <= (FIELD.w - margin*2)) break;
@@ -493,7 +512,6 @@
     }
     const ty = FIELD.y + 8;
 
-    // Base metallic gradient (vertical)
     const metal = ctx.createLinearGradient(0, ty, 0, ty + size*1.2);
     metal.addColorStop(0.0, '#eef3ff');
     metal.addColorStop(0.35,'#9aa6b6');
@@ -507,7 +525,7 @@
     ctx.fillText(title, centerX, ty);
     ctx.strokeText(title, centerX, ty);
 
-    // Sweeping light strip across words
+    // Sweeping light strip across title
     const t = performance.now()*0.001;
     const p = (t%7)/7;
     const textW = ctx.measureText(title).width;
@@ -523,7 +541,7 @@
     ctx.fillStyle = g;
     ctx.fillText(title, centerX, ty);
 
-    // Description (wrapped)
+    // Description
     const wrap = (text, maxWidth) => {
       const words = text.split(' '), lines=[]; let line='';
       ctx.font='14px system-ui';
@@ -541,52 +559,46 @@
     ctx.fillStyle='#ffe6c9'; ctx.font='14px system-ui';
     for(const L of descLines){ ctx.fillText(L, centerX, ty2); ty2 += 16; }
 
-    // Legends list
+    // Legends
     const legend = [
       {k:'spread', label:'Spread', d:'Fires 3-way shots.'},
       {k:'rapid',  label:'Rapid',  d:'Halves shot delay.'},
       {k:'side',   label:'Side Pods', d:'Adds two side cannons.'},
-      {k:'shield', label:'Shield', d:'5 charges (20 on boss).'},
+      {k:'shield', label:'Shield', d:'5 charges (cap 10 on boss).'},
       {k:'health', label:'Repair', d:'+1 life, max 6.'},
       {k:'missile',label:'Missile',d:'Boss-only, heavy damage.'}
     ];
     let ly = ty2 + 10;
     const tileW = Math.min(220, FIELD.w*0.60);
-    const tileX = FIELD.x + 12; // inset from wall
+    const tileX = FIELD.x + 12;
     ctx.textAlign='left';
     for(const it of legend){
-      // Darker tile for readability
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       roundRect(ctx, tileX, ly, tileW, 36, 10); ctx.fill();
-      // Slight border
       ctx.strokeStyle='rgba(255,255,255,0.08)';
       ctx.lineWidth=1; ctx.stroke();
 
-      // Icon pushed right so it doesn't touch left edge
       const iconX = tileX + 26;
       const iconY = ly + 18;
       drawPowerupIconAt(iconX, iconY, it.k);
 
-      // Darker strip behind text area for extra contrast
       const textLeft = iconX + 20;
       ctx.fillStyle='rgba(0,0,0,0.38)';
       roundRect(ctx, textLeft-6, ly+6, tileW - (textLeft - tileX) - 8, 24, 6); ctx.fill();
 
-      // Labels
       ctx.fillStyle='#ffe6c9'; ctx.font='bold 12px system-ui';
-      ctx.fillText(it.label, textLeft, ly+6+2);
+      ctx.fillText(it.label, textLeft, ly+8);
       ctx.fillStyle='#d9cdb6'; ctx.font='11px system-ui';
       ctx.fillText(it.d, textLeft, ly+20);
-      ly += 40; // gap
+      ly += 40;
     }
 
-    // Big player sprite (as large as possible without overlapping Start)
+    // Player sprite scaled large without overlapping Start
     const sprite = playerImgProcessed || playerImg;
-    let spriteBlockBottom = ly + 6; // top spacer before sprite
-    const startBottomY = FIELD.y + FIELD.h - 66; // max Y for Start button placement
+    let spriteBlockBottom = ly + 6;
+    const startBottomY = FIELD.y + FIELD.h - 66;
     if(sprite){
       const iw = sprite.width, ih = sprite.height;
-      // Max target so sprite bottom + 8 margin never goes past Start area
       const maxTarget = Math.max(0, startBottomY - ly - 14);
       const target = Math.min(FIELD.w*0.90, maxTarget);
       if(target > 6){
@@ -596,7 +608,7 @@
         ctx.scale(s, s);
         ctx.drawImage(sprite, -iw/2, -ih/2, iw, ih);
         ctx.restore();
-        spriteBlockBottom = ly + target + 14; // bottom + margin
+        spriteBlockBottom = ly + target + 14;
       }
     }
 
@@ -622,21 +634,21 @@
     drawRotatingGlowAroundRect(bx-10, by-10, bw+20, bh+20, 16, '#ff9a2a');
   }
 
-  // Animated glow ring around a rounded rectangle (for Start button)
+  // Animated glow ring around a rounded rectangle (for Start)
   function drawRotatingGlowAroundRect(x,y,w,h,r,color='#ff9a2a'){
     const t = performance.now()*0.001;
-    const P = 2*(w+h) - 8*r + 2*Math.PI*r; // approx perimeter of rounded rect
+    const P = 2*(w+h) - 8*r + 2*Math.PI*r;
     const dashLen = P*0.30;
 
     ctx.save();
-    // Base faint track
+    // Base track
     ctx.lineWidth = 4.5;
     ctx.strokeStyle = 'rgba(255,154,42,0.18)';
     ctx.shadowBlur = 8;
     ctx.shadowColor = color;
     roundRect(ctx, x,y,w,h,r); ctx.stroke();
 
-    // Bright moving segment
+    // Moving segment
     ctx.setLineDash([dashLen, P-dashLen]);
     ctx.lineDashOffset = -((t*180) % P);
     ctx.strokeStyle = color;
@@ -644,7 +656,7 @@
     ctx.lineWidth = 4.5;
     roundRect(ctx, x,y,w,h,r); ctx.stroke();
 
-    // Soft outer halo
+    // Soft halo
     ctx.setLineDash([]);
     ctx.shadowBlur = 22;
     ctx.globalAlpha = 0.35;
@@ -654,17 +666,15 @@
     ctx.restore();
   }
 
-  // Background and planets (menu: true uses non-overlapping static planets)
+  // Background and planets
   function drawBackground(isMenu){
     const t = performance.now()*0.001;
-    // nebula
     const g1 = ctx.createRadialGradient(WORLD.w*0.25, WORLD.h*0.25, 10, WORLD.w*0.25, WORLD.h*0.25, 180);
     g1.addColorStop(0,'rgba(70,120,200,.18)'); g1.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=g1; ctx.fillRect(0,0,WORLD.w,WORLD.h);
     const g2 = ctx.createRadialGradient(WORLD.w*0.75, WORLD.h*0.65, 10, WORLD.w*0.75, WORLD.h*0.65, 200);
     g2.addColorStop(0,'rgba(200,120,70,.16)'); g2.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=g2; ctx.fillRect(0,0,WORLD.w,WORLD.h);
-    // stars
     for(const s of stars){
       s.y += 8*s.z*0.016; if (s.y > WORLD.h) s.y -= WORLD.h;
       const tw = 0.3 + 0.35*Math.sin(t*3 + s.p);
@@ -673,7 +683,6 @@
       ctx.fillRect(s.x, s.y, 1*s.z, 1*s.z);
     }
     ctx.globalAlpha = 1;
-    // planets
     if(isMenu){
       for(const p of menuPlanets){
         drawPlanet(p.x, p.y, p.r, p.col, p.seed, p===menuPlanets[0]);
@@ -686,17 +695,14 @@
     }
   }
 
-  // Realistic planet with craters and terminator shading
   function drawPlanet(x,y,r,baseCol,seed,ring){
-    // body gradient (day-night)
-    const light = Math.PI*0.15; // light from top-right
+    const light = Math.PI*0.15;
     const lx = Math.cos(light), ly = Math.sin(light);
     const grad = ctx.createRadialGradient(x+r*lx, y+r*ly, r*0.2, x, y, r*1.05);
     grad.addColorStop(0, shade(baseCol, 1.0));
     grad.addColorStop(1, shade(baseCol, 0.35));
     ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
 
-    // craters
     const rng = mulberry32(seed);
     const count = Math.max(4, Math.floor(r/4));
     for(let i=0;i<count;i++){
@@ -708,12 +714,10 @@
       g.addColorStop(0, 'rgba(0,0,0,0.15)');
       g.addColorStop(1, 'rgba(0,0,0,0.35)');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.fill();
-      // rim highlight
       ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.arc(cx,cy,rr*0.9,0,Math.PI*2); ctx.stroke();
     }
 
-    // ring (optional)
     if(ring){
       ctx.save();
       ctx.translate(x,y); ctx.rotate(-0.2);
@@ -734,7 +738,7 @@
   }
   function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
 
-  // Watermark + credit (not used in Start UI)
+  // Watermark + credit
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
@@ -751,7 +755,6 @@
     ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText(word, cx, cy);
     ctx.fillStyle=g; ctx.fillText(word, cx, cy);
 
-    // credit placed below descender using text metrics fallback
     const m = ctx.measureText(word);
     const descent = (m.actualBoundingBoxDescent || 20);
     const creditY = cy + descent + 8;
@@ -845,6 +848,7 @@
     }
   }
 
+  // Bullet rendering
   function drawBullets(arr, friendly){
     for(const b of arr){
       if(friendly){
@@ -865,13 +869,17 @@
     }
   }
 
-  // Enemy visuals (teal + crimson)
+  // Enemy visuals — brighter lights for readability
   function hullTeal(){ return '#2e6f75'; }
   function lineDark(){ return '#0f2830'; }
   function canopy(){ return '#ffb23c'; }
-  function lightGlow(alpha){ return `rgba(255,166,49,${alpha})`; }
+  function lightGlow(alpha){ return `rgba(255,166,49,${Math.min(1, alpha*1.25)})`; } // stronger
   function hullRed(){ return '#c43a2b'; }
   function trimRed(){ return '#651c16'; }
+
+  function withGlow(draw, color='#ff9a2a', blur=12){
+    ctx.save(); ctx.shadowColor=color; ctx.shadowBlur=blur; draw(); ctx.restore();
+  }
 
   function drawEngineFlame(x,y,wide=6,long=10){
     const t = performance.now()*0.003;
@@ -894,14 +902,14 @@
         ctx.beginPath(); ctx.moveTo(17,2); ctx.lineTo(8,-6); ctx.lineTo(8,8); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-6,7,5,0,0,Math.PI*2); ctx.fill();
         ctx.fillStyle=hullRed(); ctx.fillRect(-14,4,8,10); ctx.fillRect(6,4,8,10);
-        ctx.fillStyle='#ffb23c'; ctx.fillRect(-12,9,4,2); ctx.fillRect(-12,12,4,2); ctx.fillRect(8,9,4,2); ctx.fillRect(8,12,4,2);
+        withGlow(()=>{ ctx.fillStyle=lightGlow(.9); ctx.fillRect(-12,9,4,2); ctx.fillRect(-12,12,4,2); ctx.fillRect(8,9,4,2); ctx.fillRect(8,12,4,2); });
         drawEngineFlame(-10,12,4,11); drawEngineFlame(10,12,4,11);
         break;
       }
       case 'crimson2':{
         ctx.fillStyle=hullRed(); ctx.strokeStyle=trimRed(); ctx.lineWidth=1.6;
         ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(12,8); ctx.lineTo(0,12); ctx.lineTo(-12,8); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle='rgba(175,92,217,.9)'; ctx.beginPath(); ctx.arc(-6,-2,1.6,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(6,-2,1.6,0,Math.PI*2); ctx.fill();
+        withGlow(()=>{ ctx.fillStyle='rgba(175,92,217,.95)'; ctx.beginPath(); ctx.arc(-6,-2,1.8,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(6,-2,1.8,0,Math.PI*2); ctx.fill(); }, '#b166ff', 10);
         ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-5,5.5,4.2,0,0,Math.PI*2); ctx.fill();
         drawEngineFlame(0,10,5,12); break;
       }
@@ -909,14 +917,14 @@
         ctx.fillStyle=hullRed(); ctx.strokeStyle=trimRed(); ctx.lineWidth=1.5;
         ctx.beginPath(); ctx.roundRect(-12,-12,24,24,6); ctx.fill(); ctx.stroke();
         ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-3,6,4.6,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='rgba(175,92,217,.9)'; ctx.fillRect(-3,3,6,2);
+        withGlow(()=>{ ctx.fillStyle='rgba(175,92,217,.95)'; ctx.fillRect(-3,3,6,2); }, '#ff9a2a', 10);
         drawEngineFlame(-6,10,3.5,10); drawEngineFlame(6,10,3.5,10); break;
       }
       case 'gunship':{
         ctx.fillStyle=hullTeal(); ctx.strokeStyle=lineDark(); ctx.lineWidth=1.6;
         ctx.beginPath(); ctx.roundRect(-10,-15,20,26,6); ctx.fill(); ctx.stroke();
         ctx.fillStyle=canopy(); ctx.beginPath(); ctx.ellipse(0,-6,6,5,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle=lightGlow(.5+.4*blink); ctx.fillRect(-6,0,12,2);
+        withGlow(()=>{ ctx.fillStyle=lightGlow(.6+.4*blink); ctx.fillRect(-6,0,12,2); });
         ctx.fillStyle=hullTeal(); ctx.fillRect(-14,2,8,8); ctx.fillRect(6,2,8,8);
         drawEngineFlame(0,12,6,14); break;
       }
@@ -929,7 +937,7 @@
       case 'bomber':{
         ctx.fillStyle=hullTeal(); ctx.strokeStyle=lineDark(); ctx.lineWidth=1.6;
         ctx.beginPath(); ctx.roundRect(-12,-13,24,24,6); ctx.fill(); ctx.stroke();
-        ctx.fillStyle=lightGlow(.4+.4*blink); ctx.fillRect(-10,-1,20,3);
+        withGlow(()=>{ ctx.fillStyle=lightGlow(.6+.4*blink); ctx.fillRect(-10,-1,20,3); });
         drawEngineFlame(-5,10,4,10); drawEngineFlame(5,10,4,10); break;
       }
       case 'scout':{
@@ -940,7 +948,7 @@
       case 'trident':{
         ctx.fillStyle=hullTeal(); ctx.strokeStyle=lineDark();
         ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(8,0); ctx.lineTo(0,6); ctx.lineTo(-8,0); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle=lightGlow(.45+.4*blink); ctx.fillRect(-7,0,14,2);
+        withGlow(()=>{ ctx.fillStyle=lightGlow(.55+.4*blink); ctx.fillRect(-7,0,14,2); });
         drawEngineFlame(-6,8,3,9); drawEngineFlame(6,8,3,9); break;
       }
       case 'mantis':{
@@ -952,7 +960,7 @@
       case 'bulwark':{
         ctx.fillStyle=hullTeal(); ctx.strokeStyle=lineDark();
         ctx.beginPath(); ctx.roundRect(-12,-12,24,22,4); ctx.fill(); ctx.stroke();
-        ctx.fillStyle=lightGlow(.45+.4*blink); ctx.fillRect(-12,1,24,2);
+        withGlow(()=>{ ctx.fillStyle=lightGlow(.55+.4*blink); ctx.fillRect(-12,1,24,2); });
         drawEngineFlame(0,10,5,12); break;
       }
       case 'striker':{
@@ -964,59 +972,210 @@
     ctx.restore();
   }
 
-  // BOSSES — teal motif with rotating side cannons
-  function bossHull(){ return '#2e6f75'; }
-  function bossTrim(){ return '#12333a'; }
+  // BOSS visuals (styled like the attached art)
+  function bossHull(){ return '#1e5257'; }
+  function bossHull2(){ return '#2f7a80'; }
+  function bossTrim(){ return '#0f2b2f'; }
+  function bossPanel(){ return '#ff6c2c'; }
+  function bossCore(){ return '#15b1c9'; }
+
   function drawBoss(b){
+    // Delegate per-index for silhouette variety
+    switch(b.index){
+      case 1: drawBossVariant(b, {w:118,h:64, fins:true, towers:true, thrusters:3}); break;
+      case 2: drawBossVariant(b, {w:128,h:58, fins:true, towers:false, thrusters:2, wingSweep:12}); break;
+      case 3: drawBossVariant(b, {w:110,h:70, fins:false, towers:true, thrusters:4}); break;
+      case 4: drawBossVariant(b, {w:136,h:62, fins:true, towers:true, thrusters:5, coreRings:3}); break;
+    }
+
+    // Boss health bar
     ctx.save(); ctx.translate(b.x,b.y);
-    // main body
-    ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim(); ctx.lineWidth=2.5;
-    const bw = 120, bh = 60;
-    ctx.beginPath(); ctx.roundRect(-bw/2,-bh/2,bw,bh,18); ctx.fill(); ctx.stroke();
-
-    // canopy glow
-    const glow = 0.5+0.4*Math.sin(b.t*2);
-    ctx.fillStyle=`rgba(255,178,60,${0.5+0.5*glow})`;
-    ctx.beginPath(); ctx.ellipse(0,-10,20,14,0,0,Math.PI*2); ctx.fill();
-
-    // rotating side cannons
-    ctx.save(); ctx.rotate(b.rot*0.6);
-    for(const side of [-1,1]){
-      ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim();
-      ctx.beginPath(); ctx.roundRect(side*(bw/2-18)-10,-6,20,12,4); ctx.fill(); ctx.stroke();
-      // muzzle glow
-      ctx.fillStyle=lightGlow(.7);
-      ctx.fillRect(side*(bw/2-6)-2,-3,4,6);
-    }
-    ctx.restore();
-
-    // engine flames at bottom
-    drawEngineFlame(-24, bh/2-8, 6, 16);
-    drawEngineFlame(24, bh/2-8, 6, 16);
-
-    // boss health bar
     const w=140, h=8; const pct = Math.max(0,b.hp/b.hpMax);
-    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-w/2, -bh/2-18, w, h);
+    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-w/2, -40, w, h);
     const grad = ctx.createLinearGradient(-w/2,0,w/2,0); grad.addColorStop(0,'#ff5d6c'); grad.addColorStop(1,'#ffb23c');
-    ctx.fillStyle=grad; ctx.fillRect(-w/2, -bh/2-18, w*pct, h);
-    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.strokeRect(-w/2, -bh/2-18, w, h);
+    ctx.fillStyle=grad; ctx.fillRect(-w/2, -40, w*pct, h);
+    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.strokeRect(-w/2, -40, w, h);
+    ctx.restore();
+  }
+
+  function drawBossVariant(b, opts){
+    const {w,h,fins,towers,thrusters,wingSweep=8,coreRings=2} = opts;
+    ctx.save(); ctx.translate(b.x,b.y);
+
+    // Base body
+    ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim(); ctx.lineWidth=2.5;
+    roundRect(ctx,-w/2,-h/2,w,h,18); ctx.fill(); ctx.stroke();
+
+    // Wing panels (orange)
+    ctx.fillStyle=bossPanel();
+    ctx.beginPath();
+    ctx.moveTo(-w/2+10, -h/2+14);
+    ctx.lineTo(-w/2+10, h/2-10);
+    ctx.quadraticCurveTo(-w/2+20+wingSweep, 0, -w/2+10, -h/2+14);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w/2-10, -h/2+14);
+    ctx.lineTo(w/2-10, h/2-10);
+    ctx.quadraticCurveTo(w/2-20-wingSweep, 0, w/2-10, -h/2+14);
+    ctx.fill();
+
+    // Secondary hull stripe
+    ctx.fillStyle=bossHull2();
+    roundRect(ctx,-w/2+18,-h/2+10,w-36,h-20,12); ctx.fill();
+
+    // Dome canopy (teal glow)
+    withGlow(()=>{ ctx.fillStyle='rgba(21,177,201,0.75)'; ctx.beginPath(); ctx.ellipse(0,-h*0.18, w*0.18, h*0.26, 0, 0, Math.PI*2); ctx.fill(); }, '#15b1c9', 16);
+
+    // Side towers
+    if(towers){
+      ctx.fillStyle=bossHull2(); ctx.strokeStyle=bossTrim();
+      for(const side of [-1,1]){
+        roundRect(ctx, side*(w/2-20)-6, -h/2+4, 12, 24, 4); ctx.fill(); ctx.stroke();
+        withGlow(()=>{ ctx.fillStyle='#ffb23c'; ctx.fillRect(side*(w/2-20)-3, -h/2+26, 6, 4); });
+      }
+    }
+
+    // Fins
+    if(fins){
+      ctx.fillStyle=bossHull();
+      for(const side of [-1,1]){
+        ctx.beginPath();
+        ctx.moveTo(side*(w/2-14), -h/2+14);
+        ctx.lineTo(side*(w/2-30), -h/2-6);
+        ctx.lineTo(side*(w/2-18), -h/2+10);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // Central core: rings + rotating iris like the reference art
+    for(let i=coreRings;i>=1;i--){
+      const r = 10 + i*8;
+      ctx.strokeStyle = i%2? '#51d5ef' : '#2a97a9';
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+    }
+    // rotating iris
+    ctx.save(); ctx.rotate(b.spin*0.6);
+    ctx.fillStyle = bossCore();
+    ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,154,42,0.7)';
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,14,0.3,1.2); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Thrusters (bottom)
+    const spread = Math.min(1, (thrusters-1));
+    for(let i=0;i<thrusters;i++){
+      const tx = -((thrusters-1)/2)*20 + i*20;
+      drawEngineFlame(tx, h/2-10, 6, 16);
+    }
 
     ctx.restore();
   }
+
+  // Boss patterns (unique per boss, swap at 75/50/25%)
+  function addEBullet(x,y,vx,vy){ eBullets.push({x,y,vx,vy}); }
+  function aimVelocity(x1,y1,x2,y2,speed){
+    const dx=x2-x1, dy=y2-y1; const m=Math.hypot(dx,dy)||1;
+    return {vx:dx/m*speed, vy:dy/m*speed};
+  }
+
   function bossShoot(b){
-    const add = (x,y,vx,vy)=> eBullets.push({x,y,vx,vy});
-    if(b.phase===1){
-      for(let a=-0.25;a<=0.25;a+=0.25) add(b.x,b.y+30, Math.sin(a)*130, 190);
-    }else if(b.phase===2){
-      for(let i=-2;i<=2;i++){ const a=i*0.18; add(b.x,b.y+30, Math.sin(a)*150, 210); }
-    }else{
-      const a=b.patternAngle*4; add(b.x+Math.cos(a)*36,b.y+26, Math.cos(a)*170, 230); add(b.x+Math.cos(a+Math.PI)*36,b.y+26, Math.cos(a+Math.PI)*170, 230);
+    switch(b.index){
+      case 1: shootCenturionCore(b); break;
+      case 2: shootSpiralLancer(b); break;
+      case 3: shootInfernoBarrager(b); break;
+      case 4: shootOverlordNexus(b); break;
     }
   }
+
+  // Boss 1 — Centurion Core: aimed triples + expanding rings
+  function shootCenturionCore(b){
+    const o = aimVelocity(b.x,b.y, player.x,player.y, 220);
+    // aimed triple
+    for(const off of [-80,0,80]){
+      addEBullet(b.x+off*0.06, b.y+26, o.vx + off*0.4, o.vy+40);
+    }
+    // phase-based rings
+    const baseN = b.phase>=2? 10 : 0;
+    const extra = b.phase>=3? 6 : 0;
+    const extra2 = b.phase>=4? 8 : 0;
+    const total = baseN + extra + extra2;
+    if(total>0){
+      const a0 = b.patternAngle*2;
+      for(let i=0;i<total;i++){
+        const a = a0 + i*(Math.PI*2/total);
+        const spd = 150 + (b.phase-1)*20 + (i%2?10:0);
+        addEBullet(b.x+Math.cos(a)*18, b.y+Math.sin(a)*10, Math.cos(a)*spd, Math.sin(a)*spd+60);
+      }
+    }
+  }
+
+  // Boss 2 — Spiral Lancer: continuous spiral stream + side sprays
+  function shootSpiralLancer(b){
+    const arms = b.phase>=3? 3 : b.phase>=2? 2 : 1;
+    for(let k=0;k<arms;k++){
+      const a = b.patternAngle*4 + k*(Math.PI*2/arms);
+      const spd = 170 + b.phase*20;
+      addEBullet(b.x+Math.cos(a)*20, b.y+18+Math.sin(a)*6, Math.cos(a)*spd, Math.sin(a)*spd+70);
+    }
+    if(b.phase>=2){
+      // side sprays
+      for(const side of [-1,1]){
+        for(let i=0;i<3;i++){
+          const a = (side*0.5) + (i-1)*0.08 + Math.sin(b.sweep)*0.05;
+          addEBullet(b.x+side*48, b.y+16, Math.sin(a)*160, 210);
+        }
+      }
+    }
+  }
+
+  // Boss 3 — Inferno Barrager: volleys + sweeping fans
+  function shootInfernoBarrager(b){
+    // downward volleys
+    const columns = b.phase>=3? 5 : 3;
+    for(let i=0;i<columns;i++){
+      const x = b.x - (columns-1)*18/2 + i*18;
+      addEBullet(x, b.y+28, 0, 240);
+    }
+    // sweeping fan
+    const fan = b.phase>=2? (b.phase===2? 5 : 8) : 0;
+    if(fan){
+      const a0 = -0.6 + Math.sin(b.sweep)*0.4;
+      for(let i=0;i<fan;i++){
+        const a = a0 + i*(1.2/(fan-1));
+        const spd = 200 + i*6;
+        addEBullet(b.x, b.y+22, Math.sin(a)*spd, Math.cos(a)*-40 + 160);
+      }
+    }
+  }
+
+  // Boss 4 — Overlord Nexus: rotating crosses + burst rings + aimed darts
+  function shootOverlordNexus(b){
+    // rotating cross
+    const cross = b.phase>=2? 6 : 4;
+    const a0 = b.patternAngle*3;
+    for(let i=0;i<cross;i++){
+      const a = a0 + i*(Math.PI/cross)*2;
+      addEBullet(b.x, b.y, Math.cos(a)*180, Math.sin(a)*180+70);
+    }
+    // phase 3+ bursts
+    if(b.phase>=3){
+      for(let i=0;i<8;i++){
+        const a = a0 + i*(Math.PI/4) + 0.2*(b.phase-3);
+        addEBullet(b.x+Math.cos(a)*24, b.y+Math.sin(a)*8, Math.cos(a)*140, Math.sin(a)*140+60);
+      }
+    }
+    // phase 4 aimed darts
+    if(b.phase>=4){
+      const aim = aimVelocity(b.x,b.y, player.x,player.y, 260);
+      for(const off of [-1,1,0]) addEBullet(b.x+off*10, b.y+20, aim.vx+off*40, aim.vy+20);
+    }
+  }
+
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
   function rectHitPoint(r, x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
-  // Power-ups (crash-safe, timers stack with caps)
+  // Power-ups (caps, timers)
   function bumpTimer(prop, add, cap){
     player[prop] = Math.min(cap, Math.max(0, (player[prop]||0) + add));
   }
@@ -1025,7 +1184,7 @@
       case 'spread': bumpTimer('spread', 10, 20); break;
       case 'rapid':  bumpTimer('rapid', 10, 20); break;
       case 'side':   bumpTimer('side', 12, 24); break;
-      case 'shield': player.shieldCharges = Math.min(30, player.shieldCharges + 5); break;
+      case 'shield': player.shieldCharges = Math.min(10, player.shieldCharges + 5); break; // cap 10 hits
       case 'health': player.lives = Math.min(player.maxLives, player.lives + 1); break;
       case 'missile':
         bumpTimer('missileTimer', 12, 24);
@@ -1156,7 +1315,6 @@
   function spawnBigExplosion(x,y){ for(let i=0;i<80;i++){ effects.push({x,y,vx:(Math.random()-0.5)*240,vy:(Math.random()-0.5)*240,life:0.9,t:0,color: i%2? '#ff9a3c':'#ffd37a'}); } }
 
   // Helpers for UI
-  function cap(s){ return s[0].toUpperCase()+s.slice(1); }
   function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r); c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h); c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r); c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y); c.closePath(); }
 
   if(!CanvasRenderingContext2D.prototype.roundRect){
