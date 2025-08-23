@@ -95,7 +95,6 @@
   // Playfield inside wall
   const FIELD = { x: 10, y: 40, w: WORLD.w-20, h: WORLD.h-50 };
   function layoutFieldGameplay(){
-    // tiny gap below top UI during gameplay
     const r = topUI.getBoundingClientRect();
     const worldPerCss = WORLD.h / (canvas.height/scale);
     const tinyGapCss = 1;
@@ -103,7 +102,6 @@
     FIELD.x = 10; FIELD.w = WORLD.w - 20; FIELD.h = WORLD.h - FIELD.y - 10;
   }
   function layoutFieldMenu(){
-    // Top wall flush with top of screen (no gap)
     FIELD.y = 0;
     FIELD.x = 10; FIELD.w = WORLD.w - 20; FIELD.h = WORLD.h - FIELD.y - 10;
   }
@@ -238,10 +236,15 @@
 
   // Spawning
   let spawnTimer=0, signTimer=0, powerTimer=0;
+  function levelSpeedMod(L){
+    const inRange = (L>=6 && L<=9) || (L>=11 && L<=14) || (L>=16 && L<=19);
+    return inRange ? 0.9 : 1.0; // 10% slower in those ranges
+  }
   function spawnEnemy(){
     if(isBossLevel(player.level)) return;
     const L = player.level;
-    const speed = 240 + L*36 + Math.random()*30;
+    const base = 240 + L*36 + Math.random()*30;
+    const speed = base * levelSpeedMod(L);
     const hp = 1 + Math.floor((L-1)/3);
     const typePool = ['crimson1','crimson2','crimson3','gunship','interceptor','bomber','scout','trident','mantis','bulwark','striker'];
     const type = typePool[Math.floor(Math.random()*typePool.length)];
@@ -263,7 +266,7 @@
     powerups.push({type, x, y:FIELD.y+8, vy: 170, t:0});
   }
 
-  // Bosses (HP/timing same; visuals/patterns from your script)
+  // Bosses (HP/timing same; visuals/patterns from your teal motif)
   function makeBoss(index){
     const baseDps = 71;
     const minutes = [1.0, 1.3, 1.6, 2.0][index-1];
@@ -279,7 +282,6 @@
     {x:70, y:140, r:18, col:'#ff9a2a', ring:true, vy:4, seed:1},
     {x:300, y:280, r:14, col:'#7bc8ff', ring:false, vy:5, seed:2}
   ];
-  // Menu planets (static, non-overlapping)
   const menuPlanets = [
     {x:FIELD.x+80, y:FIELD.y+150, r:22, col:'#ff9a2a', ring:true, seed:11},
     {x:FIELD.x+260, y:FIELD.y+360, r:26, col:'#7bc8ff', ring:false, seed:22}
@@ -299,10 +301,9 @@
     if(gameState==='menu'){
       layoutFieldMenu();
       topUI.style.visibility='hidden';
-      drawBackground(true); // menu = true
+      drawBackground(true);
       drawRustWall();
 
-      // everything inside wall; no watermark in menu
       ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
       drawStartMenu();
       ctx.restore();
@@ -438,7 +439,7 @@
 
   function drawFrame(){
     drawBackground(false);
-    drawWatermark(); // includes Created by Agrigorn
+    drawWatermark();
     drawRustWall();
 
     ctx.save(); ctx.beginPath(); ctx.rect(FIELD.x, FIELD.y, FIELD.w, FIELD.h); ctx.clip();
@@ -470,7 +471,7 @@
     ctx.restore();
   }
 
-  // START MENU (inside wall, no watermark)
+  // START MENU (inside wall)
   function drawStartMenu(){
     // Metallic, shiny title with sweeping light strip
     const title = 'Sign Space Adventure';
@@ -478,7 +479,6 @@
     const margin = 12;
     let size = 46;
     ctx.textAlign='center'; ctx.textBaseline='top';
-    // Fit title to available width
     while(size>24){
       ctx.font = `900 ${size}px "Trebuchet MS", Arial, system-ui`;
       if(ctx.measureText(title).width <= (FIELD.w - margin*2)) break;
@@ -487,33 +487,33 @@
     const ty = FIELD.y + 8;
 
     // Base metallic gradient (vertical)
-    const metal = ctx.createLinearGradient(0, ty, 0, ty + size*1.2);
-    metal.addColorStop(0.0, '#eef3ff');
-    metal.addColorStop(0.35,'#9aa6b6');
-    metal.addColorStop(0.5, '#ffffff');
-    metal.addColorStop(0.7, '#8a95a6');
-    metal.addColorStop(1.0, '#d7dde8');
+    const metalTitle = ctx.createLinearGradient(0, ty, 0, ty + size*1.2);
+    metalTitle.addColorStop(0.0, '#eef3ff');
+    metalTitle.addColorStop(0.35,'#9aa6b6');
+    metalTitle.addColorStop(0.5, '#ffffff');
+    metalTitle.addColorStop(0.7, '#8a95a6');
+    metalTitle.addColorStop(1.0, '#d7dde8');
 
-    ctx.fillStyle = metal;
+    ctx.fillStyle = metalTitle;
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = Math.max(1, size*0.045);
     ctx.fillText(title, centerX, ty);
     ctx.strokeText(title, centerX, ty);
 
-    // Sweeping light strip across words
+    // Sweeping light strip across the title
     const t = performance.now()*0.001;
     const p = (t%7)/7;
     const textW = ctx.measureText(title).width;
     const x1 = centerX - textW/2, x2 = centerX + textW/2;
-    const g = ctx.createLinearGradient(x1, 0, x2, 0);
+    const sweep = ctx.createLinearGradient(x1, 0, x2, 0);
     const band = p, spread = 0.06;
-    const add = (pos,col)=> g.addColorStop(Math.min(1,Math.max(0,pos)), col);
+    const add = (pos,col)=> sweep.addColorStop(Math.min(1,Math.max(0,pos)), col);
     add(0, 'rgba(255,255,255,0.10)');
     add(band-spread, 'rgba(255,255,255,0.10)');
     add(band, 'rgba(255,255,255,0.60)');
     add(band+spread, 'rgba(255,255,255,0.10)');
     add(1, 'rgba(255,255,255,0.10)');
-    ctx.fillStyle = g;
+    ctx.fillStyle = sweep;
     ctx.fillText(title, centerX, ty);
 
     // Description (wrapped)
@@ -534,7 +534,7 @@
     ctx.fillStyle='#ffe6c9'; ctx.font='14px system-ui';
     for(const L of descLines){ ctx.fillText(L, centerX, ty2); ty2 += 16; }
 
-    // Legends on the left side, with extra gaps
+    // Legends on the left side with darker background rows for readability
     const legend = [
       {k:'spread', label:'Spread', d:'Fires 3-way shots.'},
       {k:'rapid',  label:'Rapid',  d:'Halves shot delay.'},
@@ -544,51 +544,90 @@
       {k:'missile',label:'Missile',d:'Boss-only, heavy damage.'}
     ];
     let ly = ty2 + 10;
-    const leftX = FIELD.x + 12; // gap from wall
+    const leftX = FIELD.x + 12;
     ctx.textAlign='left';
     for(const it of legend){
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
-      roundRect(ctx, leftX+2, ly+2, Math.min(200, FIELD.w*0.52), 32, 8); ctx.fill();
+      // darkened row background
+      ctx.fillStyle = 'rgba(7,10,16,0.65)';
+      roundRect(ctx, leftX+2, ly+2, Math.min(220, FIELD.w*0.6), 36, 8); ctx.fill();
+      // subtle border
+      ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
+      roundRect(ctx, leftX+2, ly+2, Math.min(220, FIELD.w*0.6), 36, 8); ctx.stroke();
 
-      drawPowerupIconAt(leftX+14, ly+18, it.k);
+      drawPowerupIconAt(leftX+14, ly+20, it.k);
       ctx.fillStyle='#ffe6c9'; ctx.font='bold 12px system-ui';
-      ctx.fillText(it.label, leftX+14+28, ly+6);
+      ctx.fillText(it.label, leftX+14+28, ly+8);
       ctx.fillStyle='#d9cdb6'; ctx.font='11px system-ui';
-      ctx.fillText(it.d, leftX+14+28, ly+20);
-      ly += 40; // gap
+      ctx.fillText(it.d, leftX+14+28, ly+22);
+      ly += 44; // extra gap
     }
 
-    // Big player sprite (opaque), centered above Start button
+    // Big player sprite (bigger, but auto-fitted to avoid overlaps)
     const sprite = playerImgProcessed || playerImg;
-    let spriteBottom = ly + 6;
+    let spriteBottom = ly + 8;
     if(sprite){
       const iw = sprite.width, ih = sprite.height;
-      const target = Math.min(200, FIELD.w*0.84);
+      // compute max height available before bottom UI area
+      const availableH = Math.max(80, (FIELD.y + FIELD.h - 100) - (ly + 8)); // keep 100px bottom margin
+      const target = Math.min( Math.min(availableH, FIELD.w*0.90), 240 ); // larger than before, capped
       const s = target / Math.max(iw, ih);
       ctx.save();
-      ctx.translate(FIELD.x + FIELD.w/2, spriteBottom + target*0.5);
+      ctx.translate(FIELD.x + FIELD.w/2, ly + 8 + target*0.5);
       ctx.scale(s, s);
       ctx.drawImage(sprite, -iw/2, -ih/2, iw, ih);
       ctx.restore();
-      spriteBottom += target + 8;
+      spriteBottom = ly + 8 + target + 10;
     }
 
-    // Start button
-    const bw = 200, bh = 48;
+    // Start button — same metallic design as title + rotating light strip around
+    const bw = Math.min(220, FIELD.w - 40), bh = 50;
     const bx = FIELD.x + FIELD.w/2 - bw/2;
-    const by = Math.min(FIELD.y + FIELD.h - 66, spriteBottom);
+    const by = Math.min(FIELD.y + FIELD.h - 70, spriteBottom);
     startBtn.x=bx; startBtn.y=by; startBtn.w=bw; startBtn.h=bh;
 
-    const gbtn = ctx.createLinearGradient(0,by,0,by+bh);
-    gbtn.addColorStop(0,'#ffddaa'); gbtn.addColorStop(1,'#ffb23c');
-    ctx.fillStyle=gbtn; ctx.strokeStyle='rgba(255,180,90,.6)'; ctx.lineWidth=2;
-    roundRect(ctx, bx,by,bw,bh,12); ctx.fill(); ctx.stroke();
+    // Metallic fill like title (vertical)
+    const metalBtn = ctx.createLinearGradient(0,by,0,by+bh);
+    metalBtn.addColorStop(0.0, '#eef3ff');
+    metalBtn.addColorStop(0.35,'#9aa6b6');
+    metalBtn.addColorStop(0.5, '#ffffff');
+    metalBtn.addColorStop(0.7, '#8a95a6');
+    metalBtn.addColorStop(1.0, '#d7dde8');
 
+    ctx.fillStyle=metalBtn;
+    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=2;
+    roundRect(ctx, bx,by,bw,bh,14); ctx.fill(); ctx.stroke();
+
+    // Title-like sweep across the button body
+    const sweepBtn = ctx.createLinearGradient(bx,0,bx+bw,0);
+    const bandBtn = (performance.now()*0.001 % 7)/7, spreadBtn=0.07;
+    const addB = (pos,col)=> sweepBtn.addColorStop(Math.min(1,Math.max(0,pos)), col);
+    addB(0,'rgba(255,255,255,0.10)');
+    addB(bandBtn-spreadBtn,'rgba(255,255,255,0.10)');
+    addB(bandBtn,'rgba(255,255,255,0.55)');
+    addB(bandBtn+spreadBtn,'rgba(255,255,255,0.10)');
+    addB(1,'rgba(255,255,255,0.10)');
+    ctx.fillStyle=sweepBtn;
+    roundRect(ctx, bx,by,bw,bh,14); ctx.fill();
+
+    // Rotating light strip around the button (animated dashed glow)
+    ctx.save();
+    ctx.lineWidth=3;
+    ctx.setLineDash([18, 140]);
+    ctx.lineDashOffset = - (performance.now()*0.12); // animate
+    const edgeGrad = ctx.createLinearGradient(bx,by,bx+bw,by+bh);
+    edgeGrad.addColorStop(0,'rgba(255,255,255,0.55)');
+    edgeGrad.addColorStop(1,'rgba(255,255,255,0.20)');
+    ctx.strokeStyle=edgeGrad;
+    ctx.shadowColor='rgba(255,255,255,0.35)'; ctx.shadowBlur=10;
+    roundRect(ctx, bx-3,by-3,bw+6,bh+6,16); ctx.stroke();
+    ctx.restore();
+
+    // Button label in metallic text
     ctx.save();
     ctx.font='900 24px "Trebuchet MS", system-ui';
-    ctx.fillStyle = '#612800';
-    ctx.textAlign='center';
-    ctx.fillText('Start', FIELD.x + FIELD.w/2, by+10);
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillStyle=metalBtn; // same metallic
+    ctx.fillText('Start', FIELD.x + FIELD.w/2, by+12);
     ctx.restore();
   }
 
@@ -626,15 +665,13 @@
 
   // Realistic planet with craters and terminator shading
   function drawPlanet(x,y,r,baseCol,seed,ring){
-    // body gradient (day-night)
-    const light = Math.PI*0.15; // light from top-right
+    const light = Math.PI*0.15;
     const lx = Math.cos(light), ly = Math.sin(light);
     const grad = ctx.createRadialGradient(x+r*lx, y+r*ly, r*0.2, x, y, r*1.05);
     grad.addColorStop(0, shade(baseCol, 1.0));
     grad.addColorStop(1, shade(baseCol, 0.35));
     ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
 
-    // craters
     const rng = mulberry32(seed);
     const count = Math.max(4, Math.floor(r/4));
     for(let i=0;i<count;i++){
@@ -646,12 +683,10 @@
       g.addColorStop(0, 'rgba(0,0,0,0.15)');
       g.addColorStop(1, 'rgba(0,0,0,0.35)');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.fill();
-      // rim highlight
       ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.arc(cx,cy,rr*0.9,0,Math.PI*2); ctx.stroke();
     }
 
-    // ring (optional)
     if(ring){
       ctx.save();
       ctx.translate(x,y); ctx.rotate(-0.2);
@@ -661,18 +696,11 @@
       ctx.restore();
     }
   }
-  function shade(hex, k){
-    const c = hexToRgb(hex); const f = (v)=> Math.max(0, Math.min(255, Math.round(v*k)));
-    return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`;
-  }
-  function hexToRgb(hex){
-    const h = hex.replace('#','');
-    const n = parseInt(h,16);
-    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
-  }
+  function shade(hex, k){ const c = hexToRgb(hex); const f = (v)=> Math.max(0, Math.min(255, Math.round(v*k))); return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`; }
+  function hexToRgb(hex){ const h = hex.replace('#',''); const n = parseInt(h,16); return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 }; }
   function mulberry32(a){ return function(){ let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; } }
 
-  // Watermark + credit (not used in Start UI)
+  // Watermark + credit
   function drawWatermark(){
     const t = performance.now()*0.001; const p = (t%7)/7;
     const x1 = FIELD.x, x2 = FIELD.x+FIELD.w;
@@ -688,8 +716,6 @@
     const word = 'Sign';
     ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText(word, cx, cy);
     ctx.fillStyle=g; ctx.fillText(word, cx, cy);
-
-    // credit placed below descender using text metrics fallback
     const m = ctx.measureText(word);
     const descent = (m.actualBoundingBoxDescent || 20);
     const creditY = cy + descent + 8;
@@ -902,7 +928,7 @@
     ctx.restore();
   }
 
-  // BOSSES — teal motif with rotating side cannons (from your script)
+  // BOSSES — teal motif with rotating side cannons
   function bossHull(){ return '#2e6f75'; }
   function bossTrim(){ return '#12333a'; }
   function drawBoss(b){
@@ -922,13 +948,12 @@
     for(const side of [-1,1]){
       ctx.fillStyle=bossHull(); ctx.strokeStyle=bossTrim();
       ctx.beginPath(); ctx.roundRect(side*(bw/2-18)-10,-6,20,12,4); ctx.fill(); ctx.stroke();
-      // muzzle glow
       ctx.fillStyle=lightGlow(.7);
       ctx.fillRect(side*(bw/2-6)-2,-3,4,6);
     }
     ctx.restore();
 
-    // engine flames at bottom
+    // engine flames
     drawEngineFlame(-24, bh/2-8, 6, 16);
     drawEngineFlame(24, bh/2-8, 6, 16);
 
@@ -954,7 +979,7 @@
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
   function rectHitPoint(r, x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
-  // Power-ups (crash-safe, timers stack with caps)
+  // Power-ups (crash-safe)
   function bumpTimer(prop, add, cap){
     player[prop] = Math.min(cap, Math.max(0, (player[prop]||0) + add));
   }
