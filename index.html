@@ -473,12 +473,49 @@
 
   // START MENU (inside wall, no watermark)
   function drawStartMenu(){
-    // Title
+    // Metallic, shiny title with sweeping light strip
+    const title = 'Sign Space Adventure';
+    const centerX = FIELD.x + FIELD.w/2;
+    const margin = 12;
+    let size = 46;
     ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.font='900 46px "Trebuchet MS", system-ui';
-    const grad = ctx.createLinearGradient(0,0,0,60);
-    grad.addColorStop(0,'#ffd08a'); grad.addColorStop(1,'#ff9a2a');
-    ctx.fillStyle=grad; ctx.fillText('Sign', FIELD.x + FIELD.w/2, FIELD.y + 8);
+    // Fit title to available width
+    while(size>24){
+      ctx.font = `900 ${size}px "Trebuchet MS", Arial, system-ui`;
+      if(ctx.measureText(title).width <= (FIELD.w - margin*2)) break;
+      size--;
+    }
+    const ty = FIELD.y + 8;
+
+    // Base metallic gradient (vertical)
+    const metal = ctx.createLinearGradient(0, ty, 0, ty + size*1.2);
+    metal.addColorStop(0.0, '#eef3ff');
+    metal.addColorStop(0.35,'#9aa6b6');
+    metal.addColorStop(0.5, '#ffffff');
+    metal.addColorStop(0.7, '#8a95a6');
+    metal.addColorStop(1.0, '#d7dde8');
+
+    ctx.fillStyle = metal;
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = Math.max(1, size*0.045);
+    ctx.fillText(title, centerX, ty);
+    ctx.strokeText(title, centerX, ty);
+
+    // Sweeping light strip across words (like watermark)
+    const t = performance.now()*0.001;
+    const p = (t%7)/7;
+    const textW = ctx.measureText(title).width;
+    const x1 = centerX - textW/2, x2 = centerX + textW/2;
+    const g = ctx.createLinearGradient(x1, 0, x2, 0);
+    const band = p, spread = 0.06;
+    const add = (pos,col)=> g.addColorStop(Math.min(1,Math.max(0,pos)), col);
+    add(0, 'rgba(255,255,255,0.10)');
+    add(band-spread, 'rgba(255,255,255,0.10)');
+    add(band, 'rgba(255,255,255,0.60)');
+    add(band+spread, 'rgba(255,255,255,0.10)');
+    add(1, 'rgba(255,255,255,0.10)');
+    ctx.fillStyle = g;
+    ctx.fillText(title, centerX, ty);
 
     // Description (wrapped)
     const wrap = (text, maxWidth) => {
@@ -486,7 +523,7 @@
       ctx.font='14px system-ui';
       for(const w of words){
         const test = line? line+' '+w : w;
-        if(ctx.measureText(test).width > maxWidth){ lines.push(line); line=w; }
+        if(ctx.measureText(test).width > maxWidth){ if(line) lines.push(line); line=w; }
         else line=test;
       }
       if(line) lines.push(line);
@@ -494,11 +531,11 @@
     };
     const desc = 'Guide your ship through waves of enemies and collect Sign points. Use power ups to boost firepower and shields and prepare for bosses.';
     const descLines = wrap(desc, FIELD.w - 24);
-    let ty = FIELD.y + 56;
+    let ty2 = ty + size + 6;
     ctx.fillStyle='#ffe6c9'; ctx.font='14px system-ui';
-    for(const L of descLines){ ctx.fillText(L, FIELD.x + FIELD.w/2, ty); ty += 16; }
+    for(const L of descLines){ ctx.fillText(L, centerX, ty2); ty2 += 16; }
 
-    // Legends on the left side, vertical, with short descriptions
+    // Legends on the left side, with extra gaps between entries
     const legend = [
       {k:'spread', label:'Spread', d:'Fires 3-way shots.'},
       {k:'rapid',  label:'Rapid',  d:'Halves shot delay.'},
@@ -507,16 +544,20 @@
       {k:'health', label:'Repair', d:'+1 life, max 6.'},
       {k:'missile',label:'Missile',d:'Boss-only, heavy damage.'}
     ];
-    let ly = ty + 8;
+    let ly = ty2 + 10;
     const leftX = FIELD.x + 12; // gap from wall
     ctx.textAlign='left';
     for(const it of legend){
-      drawPowerupIconAt(leftX+12, ly+12, it.k);
+      // subtle row backdrop
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      roundRect(ctx, leftX+2, ly+2, Math.min(200, FIELD.w*0.52), 32, 8); ctx.fill();
+
+      drawPowerupIconAt(leftX+14, ly+18, it.k);
       ctx.fillStyle='#ffe6c9'; ctx.font='bold 12px system-ui';
-      ctx.fillText(it.label, leftX+12+24, ly+2);
+      ctx.fillText(it.label, leftX+14+28, ly+6);
       ctx.fillStyle='#d9cdb6'; ctx.font='11px system-ui';
-      ctx.fillText(it.d, leftX+12+24, ly+16);
-      ly += 30;
+      ctx.fillText(it.d, leftX+14+28, ly+20);
+      ly += 40; // extra gap between next legend information
     }
 
     // Big player sprite (opaque), centered above Start button
@@ -647,10 +688,14 @@
     ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.font='italic 64px "Trebuchet MS", Arial, sans-serif';
-    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Sign', cx, cy);
-    ctx.fillStyle=g; ctx.fillText('Sign', cx, cy);
-    // credit just below
-    const creditY = cy + 16;
+    const word = 'Sign';
+    ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText(word, cx, cy);
+    ctx.fillStyle=g; ctx.fillText(word, cx, cy);
+
+    // credit placed below descender (tail) using text metrics fallback
+    const m = ctx.measureText(word);
+    const descent = (m.actualBoundingBoxDescent || 20);
+    const creditY = cy + descent + 8;
     ctx.font='bold 9px system-ui';
     ctx.fillStyle='rgba(255,154,42,0.08)'; ctx.fillText('Created by Agrigorn', cx, creditY);
     ctx.fillStyle=g; ctx.fillText('Created by Agrigorn', cx, creditY);
@@ -911,7 +956,25 @@
   function bossHitbox(b){ return {x:b.x-90,y:b.y-50,w:180,h:100}; }
   function rectHitPoint(r, x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
-  // Power-ups (recursion-free)
+  // Power-ups — implement to prevent crash and apply effects safely
+  function bumpTimer(prop, add, cap){
+    player[prop] = Math.min(cap, Math.max(0, (player[prop]||0) + add));
+  }
+  function applyPower(type){
+    switch(type){
+      case 'spread': bumpTimer('spread', 10, 20); break;      // +10s up to 20s
+      case 'rapid':  bumpTimer('rapid', 10, 20); break;       // +10s up to 20s
+      case 'side':   bumpTimer('side', 12, 24); break;        // +12s up to 24s
+      case 'shield': player.shieldCharges = Math.min(30, player.shieldCharges + 5); break;
+      case 'health': player.lives = Math.min(player.maxLives, player.lives + 1); break;
+      case 'missile':
+        bumpTimer('missileTimer', 12, 24);                    // +12s up to 24s
+        player.missileCD = 0;                                 // ready to fire immediately
+        break;
+    }
+    effects.push({x:player.x, y:player.y-24, life:0.8, t:0, label:type});
+  }
+
   function drawPowerupIconCore(c, type){
     c.save();
     switch(type){
